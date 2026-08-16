@@ -630,7 +630,10 @@ function downscale(dataUrl, maxDim){
       const canvas = document.createElement('canvas');
       canvas.width = width; canvas.height = height;
       canvas.getContext('2d').drawImage(img, 0, 0, width, height);
-      resolve(canvas.toDataURL('image/jpeg', 0.9));
+      // PNG, not JPEG: this photo is never transmitted anywhere, so there's no payload-size
+      // reason to pay a lossy-compression cost — and the pixel analysis below is exactly the
+      // kind of high-frequency signal JPEG's chroma subsampling and block quantization degrade.
+      resolve(canvas.toDataURL('image/png'));
     };
     img.onerror = () => resolve(dataUrl);
     img.src = dataUrl;
@@ -795,7 +798,7 @@ els.captureBtn.addEventListener('click', () => {
   canvas.width = els.video.videoWidth || 720;
   canvas.height = els.video.videoHeight || 720;
   canvas.getContext('2d').drawImage(els.video, 0, 0, canvas.width, canvas.height);
-  downscale(canvas.toDataURL('image/jpeg', 0.92), 900).then(phasePreview);
+  downscale(canvas.toDataURL('image/png'), 900).then(phasePreview);
 });
 els.cancelBtn.addEventListener('click', phaseIdle);
 els.retakeBtn.addEventListener('click', phaseIdle);
