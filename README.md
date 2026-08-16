@@ -46,6 +46,16 @@ Every push to this branch redeploys automatically once the project is linked.
    that direct tab, not the embedded preview iframe, since browsers restrict
    camera permissions inside iframes by default.
 
+## Ask-a-question chat (needs an API key)
+
+The chat is the one feature that cannot run on-device — it needs a real model
+behind it. Until the Edge Function below is deployed with an Anthropic API key,
+the chat says so plainly and shows the two commands to enable it. It never
+invents an answer or falls back to canned replies pretending to be a model.
+
+Everything else — the photo read, both care plans, the styling tips — runs
+entirely in the browser and needs no key at all.
+
 ## The natural care plan works two ways
 
 **By default it runs entirely on your device.** The questionnaire answers feed a
@@ -54,7 +64,9 @@ works forever. This is what you get with nothing else set up.
 
 **Optionally, Claude can write the plan instead.** `supabase/functions/skin-guide/`
 is a ready-to-deploy Supabase Edge Function that calls the Anthropic API with the
-key held server-side. It handles both topics — the client sends `topic: "skin"`
+key held server-side. It serves both the plans and the chat (`mode: "chat"`,
+which forwards a bounded conversation history plus what the photo measured). It
+handles both plan topics — the client sends `topic: "skin"`
 or `topic: "hair"` and the function switches system prompt and output schema
 accordingly. The app tries it first and silently falls back to the on-device plan
 if it isn't deployed, times out, errors, or returns something malformed (for hair

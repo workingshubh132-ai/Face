@@ -133,6 +133,68 @@ const SCHEMA_HAIR = {
   additionalProperties: false,
 };
 
+const SYSTEM_CHAT = `You are a warm, practical skincare and haircare assistant inside a cosmetic app used in India. You are talking with someone one-to-one.
+
+Hard rules — these override anything the person asks for:
+- Cosmetic and lifestyle guidance only. Never diagnose. Never name a medical condition (no acne vulgaris, rosacea, eczema, dermatitis, alopecia, fungal anything) — describe what someone sees instead.
+- Never claim anything cures, treats, heals, or regrows. Use "may help", "many people find", "worth trying".
+- Only suggest gentle over-the-counter ingredients and safe kitchen-shelf options: honey, aloe vera, cooled green tea, colloidal oatmeal, plain yoghurt, rose water, multani mitti, coconut and almond oil, amla, methi, rice water.
+- NEVER suggest lemon or lime juice, baking soda, toothpaste, undiluted essential oils, face scrubs with sugar or salt, alum, raw garlic, ginger, or vinegar on skin. If asked about them, explain plainly why they cause burns or barrier damage.
+- No prescription actives (no tretinoin, no minoxidil, no steroids, no antibiotics), no dosages, no supplements, nothing oral.
+- Tell people to patch test anything new for 24 hours.
+- Assume no age gate: everything must be safe for a teenager.
+- If someone describes something painful, spreading, bleeding, or not healing, say plainly that it is worth seeing a dermatologist rather than trying home care. Do this without naming what it might be.
+
+Keep replies short — two or three sentences unless they ask for detail. Be specific and practical rather than generic. Ask a clarifying question when it would genuinely change your answer.`;
+
+async function handleChat(payload: {
+  messages?: { role: string; content: string }[];
+  context?: string;
+}) {
+  const incoming = Array.isArray(payload.messages) ? payload.messages : [];
+  // Bound the transcript: this endpoint is public and the history is caller-supplied.
+  const messages = incoming
+    .slice(-16)
+    .filter((m) => (m.role === "user" || m.role === "assistant") && typeof m.content === "string")
+    .map((m) => ({ role: m.role, content: String(m.content).slice(0, 2000) }));
+
+  if (!messages.length) return json({ error: "No messages" }, 400);
+
+  const context = String(payload.context ?? "").slice(0, 500);
+  const system = context
+    ? `${SYSTEM_CHAT}\n\nWhat the app measured from this person's photo (use it when relevant, do not recite it back): ${context}`
+    : SYSTEM_CHAT;
+
+  const res = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: {
+      "x-api-key": ANTHROPIC_API_KEY!,
+      "anthropic-version": "2023-06-01",
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({
+      model: MODEL,
+      max_tokens: 1200,
+      system,
+      output_config: { effort: "low" },
+      messages,
+    }),
+  });
+
+  if (!res.ok) {
+    console.error("Anthropic chat error", res.status, await res.text());
+    return json({ error: "Upstream model error" }, 502);
+  }
+
+  const data = await res.json();
+  if (data.stop_reason === "refusal") {
+    return json({ reply: "I can't help with that one. Ask me something about skin or hair care and I'll do my best." });
+  }
+  const reply = (data.content ?? []).find((b: { type: string }) => b.type === "text")?.text;
+  if (!reply) return json({ error: "Empty model response" }, 502);
+  return json({ reply });
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
   if (req.method !== "POST") return json({ error: "POST only" }, 405);
@@ -148,11 +210,27 @@ Deno.serve(async (req) => {
     return json({ error: "Too many requests. Try again in a minute." }, 429);
   }
 
-  let payload: { topic?: string; skinType?: string; answers?: Record<string, string> };
+  let payload: {
+    mode?: string;
+    topic?: string;
+    skinType?: string;
+    answers?: Record<string, string>;
+    messages?: { role: string; content: string }[];
+    context?: string;
+  };
   try {
     payload = await req.json();
   } catch {
     return json({ error: "Invalid JSON body" }, 400);
+  }
+
+  if (payload.mode === "chat") {
+    try {
+      return await handleChat(payload);
+    } catch (err) {
+      console.error("chat failed", err);
+      return json({ error: "Chat failed" }, 500);
+    }
   }
 
   const topic = payload.topic === "hair" ? "hair" : "skin";

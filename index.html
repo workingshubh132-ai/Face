@@ -267,6 +267,35 @@
   .doc-box li{ position:relative; padding-left:18px; font-size:0.88rem; line-height:1.5; color:var(--text-dim); }
   .doc-box li::before{ content:''; position:absolute; left:0; top:7px; width:6px; height:6px; border-radius:50%; background:var(--good); }
 
+  /* chat */
+  .chat-log{ display:flex; flex-direction:column; gap:14px; margin:18px 0; min-height:120px; }
+  .msg{ max-width:88%; font-size:0.9rem; line-height:1.6; }
+  .msg.user{ align-self:flex-end; background:var(--surface-2); border:1px solid var(--line-soft); padding:11px 14px; border-radius:var(--radius); }
+  .msg.bot{ align-self:flex-start; color:var(--text-dim); padding-left:20px; position:relative; }
+  .msg.bot::before{ content:''; position:absolute; left:0; top:10px; width:8px; height:1px; background:var(--accent); }
+  .msg.bot.thinking{ font-style:italic; opacity:0.7; }
+  .chat-form{ display:flex; gap:8px; align-items:flex-end; }
+  .chat-input{
+    flex:1; background:var(--surface-2); color:var(--text);
+    border:1px solid var(--line); border-radius:var(--radius);
+    padding:13px 14px; font-family:var(--sans); font-size:0.92rem;
+    resize:none; min-height:46px; max-height:120px; line-height:1.45;
+  }
+  .chat-input:focus{ outline:none; border-color:var(--accent); }
+  .chat-send{ flex:none; width:auto; padding:13px 20px; }
+  .chat-note{ font-size:0.75rem; color:var(--text-dim); margin:14px 0 0; line-height:1.55; font-style:italic; }
+  .chat-offline{ border:1px solid var(--line); border-left:2px solid var(--accent); padding:18px 18px 18px 20px; }
+  .chat-offline p{ font-size:0.88rem; line-height:1.65; color:var(--text-dim); margin:0 0 10px; }
+  .chat-offline p:last-child{ margin-bottom:0; }
+  .chat-offline code{ font-family:ui-monospace,Menlo,Consolas,monospace; font-size:0.8rem; color:var(--accent); background:var(--surface-2); padding:2px 6px; }
+  .chat-starters{ display:flex; flex-wrap:wrap; gap:8px; margin-bottom:6px; }
+  .starter{
+    background:transparent; color:var(--text-dim); border:1px solid var(--line-soft);
+    border-radius:var(--radius); padding:8px 12px; font-size:0.8rem;
+    font-family:var(--sans); cursor:pointer; transition:border-color .18s ease, color .18s ease;
+  }
+  .starter:hover{ border-color:var(--accent); color:var(--accent); }
+
   .fine{ font-size:0.82rem; color:var(--text-dim); line-height:1.55; margin:28px 0 20px; }
 
   #errorCard{ text-align:center; }
@@ -335,11 +364,14 @@
     <input type="file" id="fileInput" accept="image/*">
 
     <button class="linkbtn" id="hairEntryBtn">Looking for hair care instead? →</button>
+    <button class="linkbtn" id="chatEntryBtn">Or ask a question about skin or hair →</button>
   </section>
 
   <section class="card" id="resultsCard" hidden></section>
 
   <section class="card" id="guideCard" hidden></section>
+
+  <section class="card" id="chatCard" hidden></section>
 
   <section class="card" id="errorCard" hidden>
     <p id="errorText"></p>
@@ -1294,6 +1326,7 @@ const els = {
   captureCard: document.getElementById('captureCard'),
   resultsCard: document.getElementById('resultsCard'),
   guideCard: document.getElementById('guideCard'),
+  chatCard: document.getElementById('chatCard'),
   errorCard: document.getElementById('errorCard'),
   errorText: document.getElementById('errorText'),
   retryBtn: document.getElementById('retryBtn')
@@ -1358,7 +1391,7 @@ function phasePreview(dataUrl){
 }
 
 function showError(message){
-  hide(els.captureCard); hide(els.resultsCard); hide(els.guideCard); show(els.errorCard);
+  hide(els.captureCard); hide(els.resultsCard); hide(els.guideCard); hide(els.chatCard); show(els.errorCard);
   els.errorText.textContent = message;
 }
 
@@ -1530,6 +1563,7 @@ function renderResults(r){
     </div>
     <div class="row"><button class="btn btn-ghost" id="startOverBtn">Start over</button></div>
     <button class="linkbtn" id="hairFromResults">Get a hair care plan too →</button>
+    <button class="linkbtn" id="chatFromResults">Ask a question about your read →</button>
   `;
 
   // Fill the bars on the next frame so the width transition actually runs.
@@ -1541,9 +1575,10 @@ function renderResults(r){
 
   document.getElementById('guideBtn').addEventListener('click', () => startGuide('skin', r.skinType));
   document.getElementById('hairFromResults').addEventListener('click', () => startGuide('hair', r.skinType));
+  document.getElementById('chatFromResults').addEventListener('click', openChat);
 
   document.getElementById('startOverBtn').addEventListener('click', () => {
-    hide(els.resultsCard); hide(els.guideCard); show(els.captureCard); phaseIdle();
+    hide(els.resultsCard); hide(els.guideCard); hide(els.chatCard); show(els.captureCard); phaseIdle();
     window.scrollTo({ top: 0, behavior: 'smooth' });
   });
 }
@@ -1565,13 +1600,14 @@ const TOPICS = {
 
 let guideState = { topic: 'skin', step: 0, answers: {}, skinType: 'Normal' };
 let lastHairMetrics = null;
+let lastReading = null;
 
 function startGuide(topic, skinType){
   // A photo read pre-answers what it can actually see, so the hair questions
   // start from the picture instead of from nothing.
   const seeded = topic === 'hair' ? suggestHairAnswers(lastHairMetrics) : {};
   guideState = { topic, step: 0, answers: { ...seeded }, seeded, skinType: skinType || guideState.skinType };
-  hide(els.captureCard); hide(els.resultsCard);
+  hide(els.captureCard); hide(els.resultsCard); hide(els.chatCard);
   show(els.guideCard);
   renderQuestion();
   window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -1715,6 +1751,147 @@ function renderPlan(plan, fromAI){
   document.getElementById('redoGuide').addEventListener('click', () => startGuide(guideState.topic, guideState.skinType));
 }
 
+/* ---------- chat ---------- */
+
+let chatHistory = [];
+let chatBusy = false;
+
+const CHAT_STARTERS = [
+  'What should I do about oily skin?',
+  'Is coconut oil good for my hair?',
+  'How do I stop frizz?',
+  'What order do I apply things in?'
+];
+
+async function sendChat(messages, context){
+  const cfg = CFG.supabase;
+  if (!cfg?.url || !cfg?.anonKey) return { error: 'unconfigured' };
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 30000);
+  try{
+    const res = await fetch(`${cfg.url}/functions/v1/${cfg.fn}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'apikey': cfg.anonKey,
+        'Authorization': `Bearer ${cfg.anonKey}`
+      },
+      body: JSON.stringify({ mode: 'chat', messages, context }),
+      signal: controller.signal
+    });
+    if (res.status === 429) return { error: 'ratelimit' };
+    if (!res.ok) return { error: 'offline' };
+    const data = await res.json();
+    return data?.reply ? { reply: data.reply } : { error: 'offline' };
+  }catch{
+    return { error: 'offline' };
+  }finally{
+    clearTimeout(timer);
+  }
+}
+
+// What the photo measured, so the assistant knows who it is talking to.
+function chatContext(){
+  const bits = [];
+  if (lastReading?.skinType) bits.push(`skin type read as ${lastReading.skinType}`);
+  if (lastReading?.hair) bits.push(`hair: ${lastReading.hair.gloss} ${lastReading.hair.surface}`);
+  return bits.join('; ');
+}
+
+function openChat(){
+  hide(els.captureCard); hide(els.resultsCard); hide(els.guideCard);
+  show(els.chatCard);
+  renderChat();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function renderChat(offlineReason){
+  const ctx = chatContext();
+  els.chatCard.innerHTML = `
+    <p class="sec-title">Ask about your skin or hair</p>
+    ${ctx ? `<p class="plan-src">Knows your read: ${escapeHtml(ctx)}</p>` : ''}
+    ${offlineReason ? offlinePanel(offlineReason) : ''}
+    <div class="chat-log" id="chatLog">${
+      chatHistory.length
+        ? chatHistory.map(m => `<div class="msg ${m.role === 'user' ? 'user' : 'bot'}">${escapeHtml(m.content)}</div>`).join('')
+        : '<div class="msg bot">Ask me anything about looking after your skin or hair — routines, ingredients, what to avoid, or what to do about something specific.</div>'
+    }</div>
+    ${!chatHistory.length ? `<div class="chat-starters">${CHAT_STARTERS.map(s => `<button class="starter" data-q="${escapeHtml(s)}">${escapeHtml(s)}</button>`).join('')}</div>` : ''}
+    <form class="chat-form" id="chatForm">
+      <textarea class="chat-input" id="chatInput" rows="1" placeholder="Type your question…"></textarea>
+      <button class="btn btn-primary chat-send" type="submit" id="chatSend">Send</button>
+    </form>
+    <p class="chat-note">Cosmetic guidance only — never a diagnosis. Anything painful, spreading, or not healing is worth showing a dermatologist.</p>
+    <div class="sec"><div class="row"><button class="btn btn-ghost" id="chatBack">Back</button></div></div>
+  `;
+
+  const form = document.getElementById('chatForm');
+  const input = document.getElementById('chatInput');
+  form.addEventListener('submit', (e) => { e.preventDefault(); submitChat(input.value); });
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey){ e.preventDefault(); submitChat(input.value); }
+  });
+  input.addEventListener('input', () => {
+    input.style.height = 'auto';
+    input.style.height = Math.min(input.scrollHeight, 120) + 'px';
+  });
+  els.chatCard.querySelectorAll('.starter').forEach(btn =>
+    btn.addEventListener('click', () => submitChat(btn.dataset.q)));
+  document.getElementById('chatBack').addEventListener('click', leaveChat);
+
+  const log = document.getElementById('chatLog');
+  log.scrollTop = log.scrollHeight;
+  if (chatHistory.length) input.focus();
+}
+
+// No canned answers pretending to be a model. If the backend is not there, say
+// exactly that and what it takes to turn it on.
+function offlinePanel(reason){
+  if (reason === 'ratelimit'){
+    return `<div class="chat-offline"><p>That's too many questions in a row — the backend allows five a minute. Give it a moment and ask again.</p></div>`;
+  }
+  return `<div class="chat-offline">
+    <p><strong>The chat isn't connected yet.</strong> This is the one part of the app that genuinely needs an AI model behind it, and no key is configured — so rather than invent an answer, it tells you.</p>
+    <p>To turn it on, deploy the function in <code>supabase/functions/skin-guide/</code> and give it a key:</p>
+    <p><code>supabase secrets set ANTHROPIC_API_KEY=sk-ant-…</code><br><code>supabase functions deploy skin-guide --no-verify-jwt</code></p>
+    <p>Everything else — the photo read, both care plans, the styling tips — runs on your device and needs none of this.</p>
+  </div>`;
+}
+
+async function submitChat(text){
+  const q = (text || '').trim();
+  if (!q || chatBusy) return;
+  chatBusy = true;
+  chatHistory.push({ role: 'user', content: q });
+  renderChat();
+
+  const log = document.getElementById('chatLog');
+  const pending = document.createElement('div');
+  pending.className = 'msg bot thinking';
+  pending.textContent = 'Thinking…';
+  log.appendChild(pending);
+  log.scrollTop = log.scrollHeight;
+
+  const result = await sendChat(chatHistory, chatContext());
+  chatBusy = false;
+
+  if (result.reply){
+    chatHistory.push({ role: 'assistant', content: result.reply });
+    renderChat();
+  } else {
+    // Drop the unanswered question so the transcript doesn't imply a reply came.
+    chatHistory.pop();
+    renderChat(result.error);
+  }
+}
+
+function leaveChat(){
+  hide(els.chatCard);
+  if (els.resultsCard.innerHTML.trim()) show(els.resultsCard);
+  else { show(els.captureCard); phaseIdle(); }
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
 /* ---------- run the read ---------- */
 
 async function runRead(){
@@ -1743,6 +1920,7 @@ async function runRead(){
 
     await minDelay;
     stopStatusCycle();
+    lastReading = reading;
     renderResults(reading);
     hide(els.captureCard); show(els.resultsCard);
   }catch(err){
@@ -1762,6 +1940,7 @@ els.uploadBtn.addEventListener('keydown', (e) => {
   if (e.key === 'Enter' || e.key === ' '){ e.preventDefault(); els.fileInput.click(); }
 });
 document.getElementById('hairEntryBtn').addEventListener('click', () => { stopCamera(); startGuide('hair'); });
+document.getElementById('chatEntryBtn').addEventListener('click', () => { stopCamera(); openChat(); });
 function handleFile(file){
   if (!file) return;
   if (!file.type.startsWith('image/')){
