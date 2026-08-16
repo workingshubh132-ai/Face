@@ -174,6 +174,38 @@
   .ing-buy b{ font-size:0.66rem; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; color:var(--good); margin-right:7px; }
   .ing.later .ing-buy b{ color:var(--text-dim); }
 
+  /* guide */
+  .q-progress{ display:flex; gap:6px; margin-bottom:18px; }
+  .q-progress i{ flex:1; height:3px; border-radius:2px; background:var(--surface-2); }
+  .q-progress i.done{ background:var(--accent); }
+  .q-text{ font-size:1.15rem; font-weight:650; line-height:1.35; margin:0 0 16px; }
+  .q-opts{ display:flex; flex-direction:column; gap:8px; }
+  .q-opt{
+    text-align:left; width:100%; background:var(--surface-2); color:var(--text);
+    border:1px solid transparent; border-radius:12px; padding:14px 16px;
+    font-family:var(--sans); font-size:0.92rem; cursor:pointer;
+    transition:border-color .15s ease, background .15s ease;
+  }
+  .q-opt:hover{ border-color:var(--accent); }
+  .q-opt:focus-visible{ outline:2px solid var(--accent); outline-offset:2px; }
+  .q-back{ margin-top:16px; background:none; border:none; color:var(--text-dim); font-size:0.85rem; cursor:pointer; padding:4px 0; font-family:var(--sans); }
+  .q-back:hover{ color:var(--text); }
+
+  .plan-src{ font-size:0.75rem; color:var(--text-dim); margin:0 0 18px; }
+  .plan-lede{ font-size:1rem; line-height:1.6; margin:0; }
+  .day-col{ background:var(--surface-2); border-radius:12px; padding:15px; margin-bottom:10px; }
+  .day-head{ font-size:0.72rem; font-weight:700; letter-spacing:0.1em; text-transform:uppercase; color:var(--accent); margin-bottom:10px; }
+  .rem-card{ background:var(--surface-2); border-radius:12px; padding:14px 16px; border-left:2px solid var(--good); margin-bottom:10px; }
+  .rem-name{ font-size:0.92rem; font-weight:650; }
+  .rem-how{ font-size:0.85rem; color:var(--text-dim); margin-top:4px; line-height:1.5; }
+  .avoid-list{ margin:0; padding:0; list-style:none; display:flex; flex-direction:column; gap:10px; }
+  .avoid-list li{ position:relative; padding-left:24px; font-size:0.9rem; line-height:1.55; color:var(--text-dim); }
+  .avoid-list li::before{ content:'✕'; position:absolute; left:0; top:0; color:#FF5C5C; font-size:0.8rem; font-weight:700; }
+  .doc-box{ background:rgba(78,217,164,0.07); border:1px solid rgba(78,217,164,0.25); border-radius:12px; padding:16px; }
+  .doc-box ul{ margin:0; padding:0; list-style:none; display:flex; flex-direction:column; gap:9px; }
+  .doc-box li{ position:relative; padding-left:18px; font-size:0.88rem; line-height:1.5; color:var(--text-dim); }
+  .doc-box li::before{ content:''; position:absolute; left:0; top:7px; width:6px; height:6px; border-radius:50%; background:var(--good); }
+
   .fine{ font-size:0.82rem; color:var(--text-dim); line-height:1.55; margin:28px 0 20px; }
 
   #errorCard{ text-align:center; }
@@ -235,6 +267,8 @@
 
   <section class="card" id="resultsCard" hidden></section>
 
+  <section class="card" id="guideCard" hidden></section>
+
   <section class="card" id="errorCard" hidden>
     <p id="errorText"></p>
     <div class="row"><button class="btn btn-primary" id="retryBtn">Try again</button></div>
@@ -264,7 +298,20 @@ const CFG = {
   dryAbsShine: 0.05,           // whole-face highlight coverage below this, with...
   dryTextureCV: 0.16,          // ...texture coefficient-of-variation above this, reads as Dry
   resultRevealMs: 1700,
-  statusPhrases: ['Locating your face…', 'Sampling shine and tone…', 'Weighing each region…']
+  statusPhrases: ['Locating your face…', 'Sampling shine and tone…', 'Weighing each region…'],
+
+  // Optional AI guide. If this Edge Function is deployed and answers in time, its
+  // plan is used; otherwise the on-device plan below runs instead — so the app
+  // works with or without it. The photo is never sent here (see the function's
+  // source in supabase/functions/skin-guide/): only the skin type and answers.
+  // This is the Supabase *anon* key — it is designed to be public and is gated
+  // by row-level security, unlike the service_role key, which must never ship.
+  supabase: {
+    url: 'https://yhmlackdugtafthxschn.supabase.co',
+    anonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlobWxhY2tkdWd0YWZ0aHhzY2huIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODY4ODc5MzMsImV4cCI6MjEwMjQ2MzkzM30.tyaU5CNaDxD95dkgsaBHOCCUH0YcuFbNvLKRF1UrEp4',
+    fn: 'skin-guide',
+    timeoutMs: 15000
+  }
 };
 
 const REGION_BOXES = {
@@ -631,6 +678,202 @@ function buildReading(canvas, rects){
   };
 }
 
+/* ---------- natural care guide: questions ---------- */
+
+const GUIDE_QUESTIONS = [
+  { key: 'concern', text: 'What bothers you most right now?', options: [
+    { value: 'oil', label: 'Oil and shine through the day' },
+    { value: 'dry', label: 'Dryness, tightness or flaking' },
+    { value: 'bumps', label: 'Bumps and breakouts' },
+    { value: 'dull', label: 'Dullness or uneven tone' },
+    { value: 'red', label: 'Redness, stinging or sensitivity' }
+  ]},
+  { key: 'environment', text: 'Where do you spend most of your day?', options: [
+    { value: 'outdoors', label: 'Outdoors or in traffic' },
+    { value: 'ac', label: 'Indoors with AC running' },
+    { value: 'home', label: 'Mostly at home, no AC' }
+  ]},
+  { key: 'sleep', text: 'How much are you sleeping lately?', options: [
+    { value: 'low', label: 'Under 6 hours' },
+    { value: 'ok', label: 'Around 6 to 8 hours' },
+    { value: 'good', label: '8 hours or more' }
+  ]},
+  { key: 'water', text: 'How much water do you drink in a day?', options: [
+    { value: 'low', label: 'Not much — a few glasses' },
+    { value: 'mid', label: 'Somewhere in the middle' },
+    { value: 'high', label: 'Plenty, I keep a bottle with me' }
+  ]},
+  { key: 'touch', text: 'How often do you touch or pick at your face?', options: [
+    { value: 'often', label: 'Often, usually without noticing' },
+    { value: 'sometimes', label: 'Now and then' },
+    { value: 'rarely', label: 'Rarely' }
+  ]}
+];
+
+/* ---------- natural care guide: on-device plan (no network) ---------- */
+
+const PLAN_SUMMARY = {
+  oil: 'Your focus is calming oil without stripping your skin — over-washing is what usually makes shine worse. Gentle, consistent, and less is the goal.',
+  dry: 'Your focus is holding on to moisture: cooler water, sealing damp skin, and cutting anything that strips. Small changes show up fast here.',
+  bumps: 'Your focus is reducing what irritates your skin day to day — what touches your face, and how often you touch it yourself.',
+  dull: 'Your focus is sun protection and rest. Nothing you apply moves dullness as much as those two do over a few weeks.',
+  red: 'Your focus is doing less. Sensitive skin usually settles when the routine gets shorter and everything gets gentler, not stronger.'
+};
+
+const PLAN_DAILY = {
+  oil: {
+    Morning: ['Rinse with lukewarm water and a gentle cleanser — hot water pushes oil production up', 'Light moisturiser even though you feel oily; skipping it backfires', 'Sunscreen as the last step'],
+    Evening: ['Cleanse properly to clear the day off your skin', 'Blot with tissue rather than washing again if you feel shiny', 'Light moisturiser before bed']
+  },
+  dry: {
+    Morning: ['Rinse with lukewarm water only — no hot showers on your face', 'Moisturise while your skin is still damp so it seals water in', 'Sunscreen over the top'],
+    Evening: ['Gentle cleanse, no scrubbing', 'Moisturise on damp skin again', 'A bowl of water near the bed helps if you sleep with AC on']
+  },
+  bumps: {
+    Morning: ['Gentle cleanse — resist scrubbing, it spreads irritation', 'Light moisturiser', 'Sunscreen daily; marks fade slower without it'],
+    Evening: ['Cleanse after sweating rather than letting it sit', 'Hands off — no squeezing, that is what leaves marks', 'Fresh pillowcase twice a week']
+  },
+  dull: {
+    Morning: ['Gentle cleanse with lukewarm water', 'Moisturise while damp', 'Sunscreen every single day — this is the biggest lever you have'],
+    Evening: ['Cleanse the day off properly', 'Moisturise', 'Protect your sleep; skin does its repair work overnight']
+  },
+  red: {
+    Morning: ['Lukewarm water, fragrance-free cleanser, no scrubbing', 'One simple soothing moisturiser', 'Mineral sunscreen if regular ones sting'],
+    Evening: ['Rinse gently — skip cleanser entirely on days your skin feels raw', 'Moisturise', 'Keep the routine short; every extra product is another thing to react to']
+  }
+};
+
+const PLAN_REMEDIES = {
+  oil: [
+    { name: 'Multani mitti (fuller\'s earth)', how: 'Mix with plain water into a thin paste, leave 10 minutes, rinse before it fully dries. Once a week is plenty — more is drying.' },
+    { name: 'Cooled green tea', how: 'Brew, cool completely, and press over your face on cotton for a few minutes. Soothing and free.' },
+    { name: 'Aloe vera gel', how: 'A thin layer as a light moisturiser. Patch test on your inner forearm for 24 hours first.' }
+  ],
+  dry: [
+    { name: 'Raw honey', how: 'A thin layer on clean skin for 10 minutes, then rinse with lukewarm water. Two or three times a week.' },
+    { name: 'Aloe vera gel', how: 'Apply to damp skin, then your moisturiser over it to seal. Patch test first.' },
+    { name: 'Cold-pressed coconut or almond oil', how: 'Good on arms and legs after a shower. Go easy on the face if you also get bumps.' }
+  ],
+  bumps: [
+    { name: 'Raw honey', how: 'A thin layer for 10 minutes, two or three times a week. Gentle and mildly antibacterial.' },
+    { name: 'Cooled green tea compress', how: 'Cotton soaked in cooled tea, pressed on for a few minutes. Calms things down without stinging.' },
+    { name: 'Aloe vera gel', how: 'Light layer after cleansing. Patch test on your inner forearm for 24 hours before using it on your face.' }
+  ],
+  dull: [
+    { name: 'Plain curd or yoghurt', how: 'A thin layer for 10 minutes once or twice a week — the mild lactic acid gently smooths. Rinse well.' },
+    { name: 'Cooled green tea', how: 'Use as a rinse after cleansing, or press on with cotton.' },
+    { name: 'Cucumber or rose water', how: 'Chilled, on cotton, for a quick freshen-up. Patch test rose water first — some brands add fragrance.' }
+  ],
+  red: [
+    { name: 'Colloidal oatmeal', how: 'Blend plain oats to a fine powder, mix with water into a paste, 10 minutes, rinse gently. Very calming.' },
+    { name: 'Cooled chamomile or green tea compress', how: 'Cotton soaked in cooled tea, pressed on for five minutes. Nothing acidic on sensitive skin.' },
+    { name: 'Pure aloe vera gel', how: 'Look for one without added fragrance or alcohol. Patch test for 24 hours — sensitive skin reacts to more things.' }
+  ]
+};
+
+// Deliberately universal: these are the DIY remedies that send people to a
+// dermatologist, and they circulate widely enough to be worth naming every time.
+const PLAN_AVOID = [
+  'Lemon or lime juice — far too acidic for skin, and it reacts with sunlight to cause real burns and dark patches.',
+  'Baking soda — strongly alkaline, so it wrecks the slightly acidic barrier your skin depends on. Skin feels tight and worse within days.',
+  'Toothpaste on spots — it is made for enamel, not skin. It irritates and can leave a mark worse than the spot.',
+  'Undiluted essential oils, including tea tree — neat oils burn and sensitise. If you use them at all, a drop or two in a carrier oil, never straight.',
+  'Sugar or salt scrubs on the face — the sharp grains leave micro-tears. Body only, if at all.'
+];
+
+const PLAN_LIFESTYLE = {
+  environment: {
+    outdoors: 'You are in dust and traffic fumes most of the day, so the evening cleanse matters more for you than any product does — never sleep in a day\'s worth of grime.',
+    ac: 'AC pulls humidity out of the air and out of your skin. Keep water nearby, and moisturise while your skin is still damp.',
+    home: 'Being mostly indoors is easy on your skin, but still use sunscreen — window light reaches you.'
+  },
+  sleep: {
+    low: 'Under six hours is the single biggest thing working against your skin right now — barrier repair happens while you sleep.',
+    ok: 'Your sleep is in a reasonable range. Nudging toward the upper end shows up on your skin within a couple of weeks.',
+    good: 'Good sleep is doing quiet work for your skin — keep it.'
+  },
+  water: {
+    low: 'Drinking more water will not fix dryness on its own, but at this level topping it up genuinely helps how your skin looks and feels.',
+    mid: 'Your water intake is fine. Keeping a bottle within reach is usually all it takes to close the gap.',
+    high: 'Hydration is handled — no changes needed there.'
+  },
+  touch: {
+    often: 'Touching your face through the day moves oil and bacteria straight onto your skin. This is the easiest habit on this list to change, and it costs nothing.',
+    sometimes: 'Try to catch yourself resting your chin on your hand — that spot often shows it.',
+    rarely: 'Keeping your hands off your face already puts you ahead of most people.'
+  }
+};
+
+const PLAN_SEE_DOCTOR = [
+  'Deep, painful lumps under the skin that last for weeks or leave marks behind.',
+  'A sudden rash, spreading redness, or anything that bleeds, oozes, or will not heal.',
+  'Burning or stinging that does not settle after you stop using everything new.'
+];
+
+function buildLocalPlan(answers, skinType){
+  const concern = answers.concern || 'oil';
+  const daily = PLAN_DAILY[concern] || PLAN_DAILY.oil;
+  const lifestyle = [
+    PLAN_LIFESTYLE.environment[answers.environment],
+    PLAN_LIFESTYLE.sleep[answers.sleep],
+    PLAN_LIFESTYLE.water[answers.water],
+    PLAN_LIFESTYLE.touch[answers.touch]
+  ].filter(Boolean);
+
+  return {
+    summary: `Your photo read as ${skinType.toLowerCase()}. ` + (PLAN_SUMMARY[concern] || PLAN_SUMMARY.oil),
+    daily: [
+      { time: 'Morning', steps: daily.Morning },
+      { time: 'Evening', steps: daily.Evening }
+    ],
+    remedies: PLAN_REMEDIES[concern] || PLAN_REMEDIES.oil,
+    avoid: PLAN_AVOID,
+    lifestyle,
+    seeDoctor: PLAN_SEE_DOCTOR
+  };
+}
+
+/* ---------- natural care guide: optional AI plan ---------- */
+
+async function fetchRemotePlan(answers, skinType){
+  const cfg = CFG.supabase;
+  if (!cfg?.url || !cfg?.anonKey) return null;
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), cfg.timeoutMs);
+  try{
+    const res = await fetch(`${cfg.url}/functions/v1/${cfg.fn}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'apikey': cfg.anonKey,
+        'Authorization': `Bearer ${cfg.anonKey}`
+      },
+      // Note what is NOT here: the photo. Only derived text leaves the device.
+      body: JSON.stringify({ skinType, answers }),
+      signal: controller.signal
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    return data?.plan ?? null;
+  }catch(err){
+    console.warn('AI guide unavailable — using the on-device plan instead.', err);
+    return null;
+  }finally{
+    clearTimeout(timer);
+  }
+}
+
+function planLooksValid(plan){
+  return !!plan
+    && typeof plan.summary === 'string'
+    && Array.isArray(plan.daily) && plan.daily.length
+    && Array.isArray(plan.remedies) && plan.remedies.length
+    && Array.isArray(plan.avoid) && plan.avoid.length
+    && Array.isArray(plan.lifestyle)
+    && Array.isArray(plan.seeDoctor) && plan.seeDoctor.length;
+}
+
 /* ---------- UI: elements ---------- */
 
 const els = {
@@ -652,6 +895,7 @@ const els = {
   retakeBtn: document.getElementById('retakeBtn'),
   captureCard: document.getElementById('captureCard'),
   resultsCard: document.getElementById('resultsCard'),
+  guideCard: document.getElementById('guideCard'),
   errorCard: document.getElementById('errorCard'),
   errorText: document.getElementById('errorText'),
   retryBtn: document.getElementById('retryBtn')
@@ -705,7 +949,7 @@ function phasePreview(dataUrl){
 }
 
 function showError(message){
-  hide(els.captureCard); hide(els.resultsCard); show(els.errorCard);
+  hide(els.captureCard); hide(els.resultsCard); hide(els.guideCard); show(els.errorCard);
   els.errorText.textContent = message;
 }
 
@@ -858,6 +1102,9 @@ function renderResults(r){
     </div>
 
     <p class="fine">${escapeHtml(r.footnote)}</p>
+    <div class="row" style="margin-bottom:10px">
+      <button class="btn btn-primary" id="guideBtn">Build my natural care plan</button>
+    </div>
     <div class="row"><button class="btn btn-ghost" id="startOverBtn">Start over</button></div>
   `;
 
@@ -868,10 +1115,125 @@ function renderResults(r){
     });
   });
 
+  document.getElementById('guideBtn').addEventListener('click', () => startGuide(r.skinType));
+
   document.getElementById('startOverBtn').addEventListener('click', () => {
-    hide(els.resultsCard); show(els.captureCard); phaseIdle();
+    hide(els.resultsCard); hide(els.guideCard); show(els.captureCard); phaseIdle();
     window.scrollTo({ top: 0, behavior: 'smooth' });
   });
+}
+
+/* ---------- natural care guide: flow ---------- */
+
+let guideState = { step: 0, answers: {}, skinType: 'Normal' };
+
+function startGuide(skinType){
+  guideState = { step: 0, answers: {}, skinType };
+  hide(els.resultsCard);
+  show(els.guideCard);
+  renderQuestion();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function renderQuestion(){
+  const q = GUIDE_QUESTIONS[guideState.step];
+  const dots = GUIDE_QUESTIONS
+    .map((_, i) => `<i class="${i <= guideState.step ? 'done' : ''}"></i>`).join('');
+
+  els.guideCard.innerHTML = `
+    <div class="q-progress">${dots}</div>
+    <p class="sec-title">Natural care plan</p>
+    <p class="q-text">${escapeHtml(q.text)}</p>
+    <div class="q-opts">
+      ${q.options.map(o => `<button class="q-opt" data-value="${escapeHtml(o.value)}">${escapeHtml(o.label)}</button>`).join('')}
+    </div>
+    ${guideState.step > 0 ? '<button class="q-back" id="qBack">← Back</button>' : ''}
+  `;
+
+  els.guideCard.querySelectorAll('.q-opt').forEach(btn => {
+    btn.addEventListener('click', () => {
+      guideState.answers[q.key] = btn.dataset.value;
+      guideState.step++;
+      if (guideState.step >= GUIDE_QUESTIONS.length) buildPlan();
+      else renderQuestion();
+    });
+  });
+
+  const back = document.getElementById('qBack');
+  if (back) back.addEventListener('click', () => { guideState.step--; renderQuestion(); });
+}
+
+async function buildPlan(){
+  els.guideCard.innerHTML = `
+    <p class="sec-title">Natural care plan</p>
+    <p class="status" style="text-align:left">Putting your plan together…</p>
+  `;
+
+  const remote = await fetchRemotePlan(guideState.answers, guideState.skinType);
+  const useRemote = planLooksValid(remote);
+  const plan = useRemote ? remote : buildLocalPlan(guideState.answers, guideState.skinType);
+  renderPlan(plan, useRemote);
+}
+
+function renderPlan(plan, fromAI){
+  const source = fromAI
+    ? 'Written for you by Claude, from your answers — your photo was never sent.'
+    : 'Built on your device from your answers — nothing was sent anywhere.';
+
+  els.guideCard.innerHTML = `
+    <p class="sec-title">Your natural care plan</p>
+    <p class="plan-src">${escapeHtml(source)}</p>
+    <p class="plan-lede">${escapeHtml(plan.summary)}</p>
+
+    <div class="sec">
+      <p class="sec-title">Daily rhythm</p>
+      ${plan.daily.map(d => `
+        <div class="day-col">
+          <div class="day-head">${escapeHtml(d.time)}</div>
+          <ul class="routine-steps">${(d.steps || []).map(s => `<li>${escapeHtml(s)}</li>`).join('')}</ul>
+        </div>`).join('')}
+    </div>
+
+    <div class="sec">
+      <p class="sec-title">From your kitchen shelf</p>
+      ${plan.remedies.map(r => `
+        <div class="rem-card">
+          <div class="rem-name">${escapeHtml(r.name)}</div>
+          <div class="rem-how">${escapeHtml(r.how)}</div>
+        </div>`).join('')}
+      <p class="sec-note">Patch test anything new on your inner forearm for 24 hours before it goes near your face.</p>
+    </div>
+
+    <div class="sec">
+      <p class="sec-title">Skip these, however popular they are</p>
+      <ul class="avoid-list">${plan.avoid.map(a => `<li>${escapeHtml(a)}</li>`).join('')}</ul>
+    </div>
+
+    ${plan.lifestyle.length ? `
+    <div class="sec">
+      <p class="sec-title">Habits that matter for you</p>
+      <ul class="bullets">${plan.lifestyle.map(l => `<li>${escapeHtml(l)}</li>`).join('')}</ul>
+    </div>` : ''}
+
+    <div class="sec">
+      <p class="sec-title">Worth seeing a dermatologist about</p>
+      <div class="doc-box">
+        <ul>${plan.seeDoctor.map(s => `<li>${escapeHtml(s)}</li>`).join('')}</ul>
+      </div>
+    </div>
+
+    <p class="fine">Habits and gentle home care — not a treatment, and not a substitute for a dermatologist. Give any change a few weeks before judging it.</p>
+    <div class="row">
+      <button class="btn btn-ghost" id="backToResults">Back to results</button>
+      <button class="btn btn-ghost" id="redoGuide">Redo</button>
+    </div>
+  `;
+
+  document.getElementById('backToResults').addEventListener('click', () => {
+    hide(els.guideCard); show(els.resultsCard);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  });
+  document.getElementById('redoGuide').addEventListener('click', () => startGuide(guideState.skinType));
 }
 
 /* ---------- run the read ---------- */
