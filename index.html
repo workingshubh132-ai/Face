@@ -191,6 +191,9 @@
   }
   .q-opt:hover{ border-color:var(--accent); }
   .q-opt:focus-visible{ outline:2px solid var(--accent); outline-offset:2px; }
+  .q-opt.suggested{ border-color:var(--accent); display:flex; align-items:center; justify-content:space-between; gap:10px; }
+  .q-tag{ font-size:0.62rem; font-weight:700; letter-spacing:0.06em; text-transform:uppercase; color:var(--accent); flex:none; }
+  .q-hint{ font-size:0.8rem; color:var(--text-dim); margin:-8px 0 14px; line-height:1.45; }
   .q-back{ margin-top:16px; background:none; border:none; color:var(--text-dim); font-size:0.85rem; cursor:pointer; padding:4px 0; font-family:var(--sans); }
   .q-back:hover{ color:var(--text); }
 
@@ -275,7 +278,10 @@
       <button class="btn btn-ghost" id="retakeBtn">Retake</button>
     </div>
 
-    <input type="file" id="fileInput" accept="image/*" capture="user">
+    <!-- No capture="user": that attribute makes phones open the front camera and
+         skip the photo gallery entirely, so "Upload photo" could never reach your
+         saved photos — and did nothing at all wherever the camera was blocked. -->
+    <input type="file" id="fileInput" accept="image/*">
 
     <button class="linkbtn" id="hairEntryBtn">Looking for hair care instead? →</button>
   </section>
@@ -494,6 +500,153 @@ function readSkinMetrics(canvas, rects){
     faceRedness: faceSample.redness.length ? mean(faceSample.redness) : 0,
     faceTextureCV: textureCoefficientOfVariation(faceSample)
   };
+}
+
+/* ---------- hair measured from the photo ---------- */
+
+// Hair sits outside the face box: above the forehead and down both sides.
+// Values are multiples of the face box, so they scale with how close the
+// person is to the camera. Negative/over-1 values reach outside it on purpose.
+const HAIR_BOXES = {
+  top:   [0.10, -0.50, 0.90, -0.04],
+  left:  [-0.32, -0.05, 0.00, 0.60],
+  right: [1.00, -0.05, 1.32, 0.60]
+};
+
+function hairRectsFromFaceBox([left, top, right, bottom], canvasW, canvasH){
+  const fw = Math.max(1, right - left), fh = Math.max(1, bottom - top);
+  const rects = {};
+  for (const [key, [x0, y0, x1, y1]] of Object.entries(HAIR_BOXES)){
+    const rx = left + x0 * fw, ry = top + y0 * fh;
+    const rw = (x1 - x0) * fw, rh = (y1 - y0) * fh;
+    // Clamp into the canvas — these boxes deliberately reach past the face and
+    // would otherwise sample transparent pixels off the edge of the image.
+    const cx = clamp(rx, 0, canvasW), cy = clamp(ry, 0, canvasH);
+    const cw = clamp(rx + rw, 0, canvasW) - cx, ch = clamp(ry + rh, 0, canvasH) - cy;
+    if (cw >= 8 && ch >= 8) rects[key] = { x: cx, y: cy, w: cw, h: ch };
+  }
+  return rects;
+}
+
+function avgColor(ctx, x, y, w, h){
+  let d;
+  try{ d = ctx.getImageData(Math.round(x), Math.round(y), Math.max(1, Math.round(w)), Math.max(1, Math.round(h))).data; }
+  catch{ return null; }
+  let r = 0, g = 0, b = 0, n = 0;
+  for (let i = 0; i < d.length; i += 16){ r += d[i]; g += d[i+1]; b += d[i+2]; n++; }
+  return n ? { r: r/n, g: g/n, b: b/n } : null;
+}
+
+const colorDist = (a, b) =>
+  Math.sqrt((a.r-b.r)**2 + (a.g-b.g)**2 + (a.b-b.b)**2);
+
+// The hair boxes deliberately reach past the head, so a good chunk of what they
+// cover is background and skin. Measuring that mixture told us about the
+// hair/background boundary rather than about the hair, so pixels are matched
+// against a background and a skin reference first and only the remainder counts.
+const HAIR_PIXEL_MIN_DIST = 48;
+const HAIR_MIN_COVERAGE = 0.12;
+
+function readHairMetrics(canvas, faceBox){
+  const ctx = canvas.getContext('2d');
+  const rects = hairRectsFromFaceBox(faceBox, canvas.width, canvas.height);
+  if (!Object.keys(rects).length) return null;
+
+  const W = canvas.width, H = canvas.height;
+  const cw = Math.max(4, Math.round(W * 0.06)), ch = Math.max(4, Math.round(H * 0.06));
+  const corners = [
+    avgColor(ctx, 0, 0, cw, ch),
+    avgColor(ctx, W - cw, 0, cw, ch),
+    avgColor(ctx, 0, H - ch, cw, ch),
+    avgColor(ctx, W - cw, H - ch, cw, ch)
+  ].filter(Boolean);
+  if (!corners.length) return null;
+  const bg = {
+    r: mean(corners.map(c => c.r)), g: mean(corners.map(c => c.g)), b: mean(corners.map(c => c.b))
+  };
+
+  const [fl, ft, fr, fb] = faceBox;
+  const skin = avgColor(ctx, fl + (fr-fl)*0.3, ft + (fb-ft)*0.45, (fr-fl)*0.4, (fb-ft)*0.2);
+  if (!skin) return null;
+
+  const lums = [];
+  let edgeSum = 0, edgePairs = 0, considered = 0;
+
+  for (const rect of Object.values(rects)){
+    let img;
+    try{ img = ctx.getImageData(Math.round(rect.x), Math.round(rect.y), Math.round(rect.w), Math.round(rect.h)); }
+    catch{ continue; }
+    const { data, width, height } = img;
+
+    for (let y = 0; y < height; y++){
+      let prevLum = null; // reset per row so differences never wrap between rows
+      for (let x = 0; x < width; x++){
+        const i = (y * width + x) * 4;
+        const px = { r: data[i], g: data[i+1], b: data[i+2] };
+        considered++;
+        if (colorDist(px, bg) < HAIR_PIXEL_MIN_DIST || colorDist(px, skin) < HAIR_PIXEL_MIN_DIST){
+          prevLum = null;
+          continue;
+        }
+        const lum = Math.max(px.r, px.g, px.b);
+        lums.push(lum);
+        if (prevLum !== null){ edgeSum += Math.abs(lum - prevLum); edgePairs++; }
+        prevLum = lum;
+      }
+    }
+  }
+
+  // Too little actually looked like hair — a bald head, a hat, a tight crop, or
+  // a background too close in colour to separate. Better to show nothing.
+  if (!considered || lums.length / considered < HAIR_MIN_COVERAGE || lums.length < 400) return null;
+
+  const avg = mean(lums);
+  if (avg < 1e-6) return null;
+
+  // Gloss means highlights that are clearly brighter than the hair around them.
+  // A percentile cutoff can't express that: measured against its own 80th
+  // percentile, every head returns ~20% shine no matter how flat it looks.
+  const sorted = [...lums].sort((a, b) => a - b);
+  const median = sorted[Math.floor(sorted.length / 2)];
+  const glossCut = Math.max(median * 1.5, median + 40);
+  let hits = 0;
+  for (const l of lums) if (l > glossCut) hits++;
+
+  return {
+    shine: hits / lums.length,
+    texture: stdev(lums, avg) / avg,
+    edge: edgePairs ? (edgeSum / edgePairs) / avg : 0,
+    coverage: lums.length / considered
+  };
+}
+
+const HAIR_EDGE_CURLY = 0.055;   // above this, lots of high-frequency detail
+const HAIR_EDGE_WAVY  = 0.030;
+const HAIR_SHINE_DULL = 0.02;
+
+// Deliberately a *suggestion*, not a verdict. A photo can show gloss and
+// flyaways; it cannot reliably tell a wave from a curl, and it can never tell
+// how a scalp feels. The questionnaire pre-selects these and the user corrects.
+function suggestHairAnswers(m){
+  if (!m) return {};
+  const hairType = m.edge > HAIR_EDGE_CURLY ? 'curly'
+                 : m.edge > HAIR_EDGE_WAVY  ? 'wavy'
+                 : 'straight';
+  const concern = m.edge > HAIR_EDGE_CURLY ? 'frizz'
+                : m.shine < HAIR_SHINE_DULL ? 'dull'
+                : 'dry';
+  return { hairType, concern };
+}
+
+function hairReadout(m){
+  if (!m) return null;
+  const gloss = m.shine > 0.06 ? 'Catching plenty of light — looks glossy.'
+              : m.shine < HAIR_SHINE_DULL ? 'Reading fairly flat, not much shine coming back.'
+              : 'A moderate amount of shine.';
+  const surface = m.edge > HAIR_EDGE_CURLY ? 'Lots of texture and stray strands at the edges.'
+                : m.edge > HAIR_EDGE_WAVY ? 'Some movement and texture in the surface.'
+                : 'The surface reads smooth and even.';
+  return { gloss, surface, shinePct: Math.round(m.shine * 100), texturePct: Math.round(m.edge * 1000) };
 }
 
 /* ---------- classification (pure function — testable without a canvas) ---------- */
@@ -1287,6 +1440,20 @@ function renderResults(r){
       <ul class="bullets">${r.observations.map(o => `<li>${escapeHtml(o)}</li>`).join('')}</ul>
     </div>
 
+    ${r.hair ? `
+    <div class="sec">
+      <p class="sec-title">Your hair, from the same photo</p>
+      <div class="stats">
+        <div class="stat"><div class="stat-val">${r.hair.shinePct}%</div><div class="stat-lab">of your hair caught the light</div></div>
+        <div class="stat"><div class="stat-val">${r.hair.texturePct}</div><div class="stat-lab">surface texture index</div></div>
+      </div>
+      <ul class="bullets" style="margin-top:14px">
+        <li>${escapeHtml(r.hair.gloss)}</li>
+        <li>${escapeHtml(r.hair.surface)}</li>
+      </ul>
+      <p class="sec-note">A photo can show gloss and stray strands. It cannot tell a wave from a curl reliably, or how your scalp feels — the hair plan asks you those.</p>
+    </div>` : ''}
+
     <div class="sec">
       <p class="sec-title">Your routine</p>
       <div class="routine">
@@ -1346,9 +1513,13 @@ const TOPICS = {
 };
 
 let guideState = { topic: 'skin', step: 0, answers: {}, skinType: 'Normal' };
+let lastHairMetrics = null;
 
 function startGuide(topic, skinType){
-  guideState = { topic, step: 0, answers: {}, skinType: skinType || guideState.skinType };
+  // A photo read pre-answers what it can actually see, so the hair questions
+  // start from the picture instead of from nothing.
+  const seeded = topic === 'hair' ? suggestHairAnswers(lastHairMetrics) : {};
+  guideState = { topic, step: 0, answers: { ...seeded }, seeded, skinType: skinType || guideState.skinType };
   hide(els.captureCard); hide(els.resultsCard);
   show(els.guideCard);
   renderQuestion();
@@ -1361,12 +1532,15 @@ function renderQuestion(){
   const dots = topic.questions
     .map((_, i) => `<i class="${i <= guideState.step ? 'done' : ''}"></i>`).join('');
 
+  const suggested = guideState.seeded?.[q.key];
+
   els.guideCard.innerHTML = `
     <div class="q-progress">${dots}</div>
     <p class="sec-title">${escapeHtml(topic.label)}</p>
     <p class="q-text">${escapeHtml(q.text)}</p>
+    ${suggested ? '<p class="q-hint">Guessed from your photo — tap it to confirm, or pick another.</p>' : ''}
     <div class="q-opts">
-      ${q.options.map(o => `<button class="q-opt" data-value="${escapeHtml(o.value)}">${escapeHtml(o.label)}</button>`).join('')}
+      ${q.options.map(o => `<button class="q-opt${o.value === suggested ? ' suggested' : ''}" data-value="${escapeHtml(o.value)}">${escapeHtml(o.label)}${o.value === suggested ? '<span class="q-tag">from photo</span>' : ''}</button>`).join('')}
     </div>
     <button class="q-back" id="qBack">${guideState.step > 0 ? '← Back' : '← Cancel'}</button>
   `;
@@ -1512,6 +1686,9 @@ async function runRead(){
     animatePins(pinPositions(rects, canvas.width, canvas.height));
 
     const reading = buildReading(canvas, rects);
+    // Same photo, second read: the hair around the face box.
+    lastHairMetrics = readHairMetrics(canvas, box);
+    reading.hair = hairReadout(lastHairMetrics);
 
     await minDelay;
     stopStatusCycle();
