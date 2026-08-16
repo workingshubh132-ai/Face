@@ -110,7 +110,10 @@
   .btn-ghost:hover{ border-color:#43434B; }
   .btn:focus-visible{ outline:2px solid var(--accent); outline-offset:3px; }
 
-  input[type=file]{ display:none; }
+  /* Visually hidden rather than display:none — some browsers refuse to open a
+     picker for an input that is fully removed from layout. */
+  input[type=file]{ position:absolute; width:1px; height:1px; opacity:0; pointer-events:none; }
+  label.btn{ display:flex; align-items:center; justify-content:center; text-align:center; }
 
   /* ---------- results ---------- */
   .sec{ margin-top:30px; }
@@ -259,7 +262,9 @@
 
     <div class="row" id="controlsIdle">
       <button class="btn btn-primary" id="cameraBtn">Use camera</button>
-      <button class="btn btn-ghost" id="uploadBtn">Upload photo</button>
+      <!-- A <label> opens the picker natively. A JS fileInput.click() is blocked
+           in strict iframe sandboxes and fails silently; a label still works. -->
+      <label class="btn btn-ghost" id="uploadBtn" for="fileInput" tabindex="0" role="button">Upload photo</label>
     </div>
     <div class="row" id="controlsCamera" hidden>
       <button class="btn btn-primary" id="captureBtn">Capture</button>
@@ -1112,8 +1117,13 @@ function phaseIdle(){
 }
 
 async function phaseCamera(){
+  // getUserMedia only exists on https:// or localhost. Opening the file straight
+  // from disk (file://) or over plain http silently removes it entirely, which
+  // is the most common reason the camera button appears to do nothing.
   if (!navigator.mediaDevices?.getUserMedia){
-    setStatus("Camera isn't available here — try uploading a photo instead.");
+    setStatus(window.isSecureContext
+      ? 'This browser blocks camera access here. Use "Upload photo" instead.'
+      : 'The camera needs an https:// address — open the deployed link, or use "Upload photo".');
     return;
   }
   try{
@@ -1124,7 +1134,13 @@ async function phaseCamera(){
     setStatus('');
   }catch(err){
     console.error('Camera error', err);
-    setStatus("Camera isn't available here — try uploading a photo instead.");
+    const msg = {
+      NotAllowedError: 'Camera permission is blocked. Allow it in your browser’s site settings, or use "Upload photo".',
+      NotFoundError: 'No camera found on this device. Use "Upload photo" instead.',
+      NotReadableError: 'Another app is using the camera. Close it and try again, or use "Upload photo".',
+      SecurityError: 'This page is not allowed to open the camera. Use "Upload photo" instead.'
+    }[err?.name];
+    setStatus(msg || 'The camera would not start here. Use "Upload photo" instead.');
   }
 }
 
@@ -1512,15 +1528,44 @@ async function runRead(){
 /* ---------- wiring ---------- */
 
 els.cameraBtn.addEventListener('click', phaseCamera);
-els.uploadBtn.addEventListener('click', () => els.fileInput.click());
+// No click handler on uploadBtn: it is a <label for="fileInput">, so the browser
+// opens the picker itself. Adding a JS .click() here would open it twice.
+els.uploadBtn.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' || e.key === ' '){ e.preventDefault(); els.fileInput.click(); }
+});
 document.getElementById('hairEntryBtn').addEventListener('click', () => { stopCamera(); startGuide('hair'); });
-els.fileInput.addEventListener('change', (e) => {
-  const file = e.target.files?.[0];
+function handleFile(file){
   if (!file) return;
+  if (!file.type.startsWith('image/')){
+    setStatus('That file is not an image — pick a photo instead.');
+    return;
+  }
+  setStatus('');
   const reader = new FileReader();
   reader.onload = () => downscale(reader.result, 900).then(phasePreview);
+  reader.onerror = () => setStatus('That photo could not be opened. Try another one.');
   reader.readAsDataURL(file);
+}
+
+els.fileInput.addEventListener('change', (e) => {
+  handleFile(e.target.files?.[0]);
   els.fileInput.value = '';
+});
+
+// Extra ways in, so a blocked file picker is never the only route.
+const frame = document.querySelector('.viewfinder');
+['dragenter','dragover'].forEach(ev => frame.addEventListener(ev, (e) => {
+  e.preventDefault();
+  frame.style.outline = '2px dashed var(--accent)';
+}));
+['dragleave','drop'].forEach(ev => frame.addEventListener(ev, () => { frame.style.outline = ''; }));
+frame.addEventListener('drop', (e) => {
+  e.preventDefault();
+  handleFile(e.dataTransfer?.files?.[0]);
+});
+window.addEventListener('paste', (e) => {
+  const item = [...(e.clipboardData?.items || [])].find(i => i.type.startsWith('image/'));
+  if (item) handleFile(item.getAsFile());
 });
 els.captureBtn.addEventListener('click', () => {
   const canvas = document.createElement('canvas');
