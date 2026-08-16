@@ -60,6 +60,20 @@ Hard rules:
 
 Write in warm, plain, everyday English. Be specific and practical rather than generic. Keep each string to one or two short sentences.`;
 
+const SYSTEM_HAIR = `You write gentle, practical hair care guidance for a cosmetic app used in India.
+
+Hard rules:
+- Cosmetic and lifestyle guidance only. Never diagnose. Never name a medical condition (no alopecia, seborrheic dermatitis, psoriasis, ringworm, etc.) — describe what someone sees instead ("flaking that keeps coming back", "hair coming out more than usual").
+- Never claim anything cures, treats, regrows, or reverses hair loss. Use "may help", "many people find", "worth trying".
+- Natural and kitchen-shelf options only, and only ones that are safe on hair and scalp: coconut oil, almond oil, amla, curry leaves, methi (fenugreek) soaked and ground, aloe vera, hibiscus, rice water, plain yoghurt, diluted apple cider vinegar as an occasional rinse.
+- NEVER suggest: undiluted lemon juice on the scalp, raw onion juice without a patch-test warning, bleach, baking soda, dish soap, or hot water washing. The "avoid" list must warn against several damaging habits with a short reason each.
+- No minoxidil, finasteride, ketoconazole, steroids, supplements, or anything oral or prescription.
+- Always tell the user to patch test a new thing behind the ear or on the inner arm for 24 hours first.
+- Assume no age gate: keep everything safe for a teenager.
+- For "styling", give practical technique tips suited to their hair type — no heat above what a home dryer does, and always mention heat protectant when heat is involved.
+
+Write in warm, plain, everyday English. Be specific and practical rather than generic. Keep each string to one or two short sentences.`;
+
 const SCHEMA = {
   type: "object",
   properties: {
@@ -96,6 +110,29 @@ const SCHEMA = {
   additionalProperties: false,
 };
 
+// Same shape as SCHEMA plus `styling`, so the client renders both with one
+// code path. The client only reveals styling when the user asks for it.
+const SCHEMA_HAIR = {
+  type: "object",
+  properties: {
+    ...SCHEMA.properties,
+    styling: {
+      type: "array",
+      items: {
+        type: "object",
+        properties: {
+          name: { type: "string" },
+          how: { type: "string" },
+        },
+        required: ["name", "how"],
+        additionalProperties: false,
+      },
+    },
+  },
+  required: [...SCHEMA.required, "styling"],
+  additionalProperties: false,
+};
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
   if (req.method !== "POST") return json({ error: "POST only" }, 405);
@@ -111,13 +148,14 @@ Deno.serve(async (req) => {
     return json({ error: "Too many requests. Try again in a minute." }, 429);
   }
 
-  let payload: { skinType?: string; answers?: Record<string, string> };
+  let payload: { topic?: string; skinType?: string; answers?: Record<string, string> };
   try {
     payload = await req.json();
   } catch {
     return json({ error: "Invalid JSON body" }, 400);
   }
 
+  const topic = payload.topic === "hair" ? "hair" : "skin";
   const skinType = String(payload.skinType ?? "").slice(0, 40);
   const answers = payload.answers ?? {};
   // Bound what reaches the model — this endpoint is public.
@@ -126,7 +164,19 @@ Deno.serve(async (req) => {
     .map(([k, v]) => `- ${String(k).slice(0, 60)}: ${String(v).slice(0, 120)}`)
     .join("\n");
 
-  const userMessage = `An on-device photo read estimated this person's skin type as: ${skinType || "unknown"}.
+  const userMessage = topic === "hair"
+    ? `Someone answered a short hair questionnaire:
+${answerLines || "- (no answers given)"}
+
+Write them a natural hair care plan:
+- summary: two sentences on what to focus on, given their hair type and answers.
+- daily: two entries, "Wash day" and "Between washes", 3-4 steps each — habits and technique, not product shopping.
+- remedies: 3-4 safe kitchen-shelf options, each with how to use it and how often. Include the patch-test reminder in at least one.
+- avoid: 4-5 common habits that actually damage hair, each with a short reason.
+- lifestyle: 3-4 habits tied to their specific answers (wash frequency, heat and chemical use, scalp feel).
+- styling: 3-4 styling techniques suited specifically to their hair type, each with how to do it.
+- seeDoctor: 3 plain-language signs it's worth seeing a dermatologist about their scalp or hair.`
+    : `An on-device photo read estimated this person's skin type as: ${skinType || "unknown"}.
 
 They answered a short questionnaire:
 ${answerLines || "- (no answers given)"}
@@ -150,10 +200,10 @@ Write them a natural care plan:
       body: JSON.stringify({
         model: MODEL,
         max_tokens: 4000,
-        system: SYSTEM,
+        system: topic === "hair" ? SYSTEM_HAIR : SYSTEM,
         output_config: {
           effort: "low",
-          format: { type: "json_schema", schema: SCHEMA },
+          format: { type: "json_schema", schema: topic === "hair" ? SCHEMA_HAIR : SCHEMA },
         },
         messages: [{ role: "user", content: userMessage }],
       }),

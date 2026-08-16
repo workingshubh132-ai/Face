@@ -15,9 +15,14 @@ The whole app is `index.html` — no build step, no dependencies to install.
 4. **Natural care plan** — a short questionnaire produces habit-level guidance,
    safe kitchen-shelf remedies, and an explicit list of popular DIY remedies to
    avoid (lemon juice, baking soda, toothpaste and friends cause real damage).
+5. **Hair care plan** — its own questionnaire (hair type, scalp, concern, wash
+   frequency, heat use) with wash-day and between-wash routines, remedies, and a
+   damaging-habits list. Reachable without taking a photo, since hair guidance
+   needs no image. **Styling tips are gated behind a button** and only appear
+   when asked for.
 
-Cosmetic guidance only. It never names a medical condition and never claims to
-treat or cure anything.
+Cosmetic guidance only. Neither plan names a medical condition, and neither
+claims to treat, cure, or regrow anything.
 
 ## Run it on Vercel (real HTTPS URL, works on any device)
 
@@ -49,9 +54,12 @@ works forever. This is what you get with nothing else set up.
 
 **Optionally, Claude can write the plan instead.** `supabase/functions/skin-guide/`
 is a ready-to-deploy Supabase Edge Function that calls the Anthropic API with the
-key held server-side. The app tries it first and silently falls back to the
-on-device plan if it isn't deployed, times out, errors, or returns something
-malformed — so deploying it is a pure upgrade with no risk of breaking the app.
+key held server-side. It handles both topics — the client sends `topic: "skin"`
+or `topic: "hair"` and the function switches system prompt and output schema
+accordingly. The app tries it first and silently falls back to the on-device plan
+if it isn't deployed, times out, errors, or returns something malformed (for hair
+that includes a response missing the styling section) — so deploying it is a pure
+upgrade with no risk of breaking the app.
 
 To turn it on (needs an Anthropic API key with credit):
 

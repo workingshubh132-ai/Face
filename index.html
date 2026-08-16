@@ -191,6 +191,14 @@
   .q-back{ margin-top:16px; background:none; border:none; color:var(--text-dim); font-size:0.85rem; cursor:pointer; padding:4px 0; font-family:var(--sans); }
   .q-back:hover{ color:var(--text); }
 
+  .linkbtn{
+    display:block; width:100%; margin-top:14px; padding:6px 0;
+    background:none; border:none; color:var(--text-dim);
+    font-family:var(--sans); font-size:0.85rem; cursor:pointer; text-align:center;
+  }
+  .linkbtn:hover{ color:var(--accent); }
+  .linkbtn:focus-visible{ outline:2px solid var(--accent); outline-offset:2px; border-radius:6px; }
+
   .plan-src{ font-size:0.75rem; color:var(--text-dim); margin:0 0 18px; }
   .plan-lede{ font-size:1rem; line-height:1.6; margin:0; }
   .day-col{ background:var(--surface-2); border-radius:12px; padding:15px; margin-bottom:10px; }
@@ -263,6 +271,8 @@
     </div>
 
     <input type="file" id="fileInput" accept="image/*" capture="user">
+
+    <button class="linkbtn" id="hairEntryBtn">Looking for hair care instead? →</button>
   </section>
 
   <section class="card" id="resultsCard" hidden></section>
@@ -710,6 +720,39 @@ const GUIDE_QUESTIONS = [
   ]}
 ];
 
+const HAIR_QUESTIONS = [
+  { key: 'hairType', text: 'What is your hair like when it dries on its own?', options: [
+    { value: 'straight', label: 'Straight, little to no bend' },
+    { value: 'wavy', label: 'Wavy — loose S-shapes' },
+    { value: 'curly', label: 'Curly — defined spirals' },
+    { value: 'coily', label: 'Coily or tightly curled' }
+  ]},
+  { key: 'scalp', text: 'How does your scalp feel a day or two after washing?', options: [
+    { value: 'oily', label: 'Greasy again quickly' },
+    { value: 'dry', label: 'Dry, tight or itchy' },
+    { value: 'flaky', label: 'Flaky' },
+    { value: 'normal', label: 'Comfortable, nothing unusual' }
+  ]},
+  { key: 'concern', text: 'What bothers you most about your hair?', options: [
+    { value: 'frizz', label: 'Frizz and flyaways' },
+    { value: 'fall', label: 'More hair falling than usual' },
+    { value: 'dry', label: 'Dry, rough ends or split ends' },
+    { value: 'dull', label: 'Flat and dull, no shine' },
+    { value: 'scalp', label: 'Scalp discomfort or flaking' }
+  ]},
+  { key: 'washFreq', text: 'How often do you wash your hair?', options: [
+    { value: 'daily', label: 'Every day' },
+    { value: 'often', label: 'Two or three times a week' },
+    { value: 'weekly', label: 'About once a week' },
+    { value: 'rare', label: 'Less than once a week' }
+  ]},
+  { key: 'heat', text: 'Do you use heat or chemical treatments?', options: [
+    { value: 'often', label: 'Often — straightener, dryer or colour' },
+    { value: 'sometimes', label: 'Occasionally, for events' },
+    { value: 'never', label: 'Almost never' }
+  ]}
+];
+
 /* ---------- natural care guide: on-device plan (no network) ---------- */
 
 const PLAN_SUMMARY = {
@@ -833,9 +876,150 @@ function buildLocalPlan(answers, skinType){
   };
 }
 
+/* ---------- hair: on-device plan (no network) ---------- */
+
+const HAIR_SUMMARY = {
+  frizz: 'Frizz is almost always thirsty hair reaching for moisture in the air. The fix is holding water in, and handling your hair less roughly when it is wet.',
+  fall: 'Some shedding every day is normal — around fifty to a hundred strands. What helps most is reducing the tugging and tension your hair goes through daily.',
+  dry: 'Your ends are the oldest part of your hair and get the least oil from your scalp. Focus your care there, and be gentler when detangling.',
+  dull: 'Dullness usually comes from a roughed-up outer layer scattering light. Cooler water and less heat let it lie flat again and shine.',
+  scalp: 'Start with your scalp rather than your lengths. Gentler washing and less friction settle most everyday scalp complaints.'
+};
+
+const HAIR_DAILY = {
+  straight: {
+    'Wash day': ['Massage shampoo into the scalp only — the lengths get clean in the rinse', 'Conditioner on mid-lengths and ends, never the roots', 'Finish with a cooler rinse to lay the cuticle flat'],
+    'Between washes': ['Brush from the ends upward, never root-down through knots', 'Keep heavy oils off the lengths — they flatten straight hair fast', 'Loose ties only; tight elastics in the same spot cause breakage']
+  },
+  wavy: {
+    'Wash day': ['Shampoo the scalp, condition the lengths generously', 'Detangle with your fingers or a wide comb while conditioner is still in', 'Scrunch out water with a cotton t-shirt instead of rubbing with a towel'],
+    'Between washes': ['Do not brush dry hair — it pulls the waves apart into frizz', 'Refresh with a little water in your palms and scrunch', 'Loose braid at night keeps the shape']
+  },
+  curly: {
+    'Wash day': ['Wash the scalp, condition heavily through the lengths', 'Detangle only with conditioner in, using fingers or a wide comb', 'Apply leave-in to soaking wet hair, then scrunch — curls set as they dry'],
+    'Between washes': ['Hands off once it is drying; touching it mid-dry is what causes frizz', 'Pineapple it — loose high ponytail on top of your head at night', 'A satin or silk pillowcase makes a visible difference by morning']
+  },
+  coily: {
+    'Wash day': ['Section your hair before washing — it makes everything easier', 'Condition generously; coily hair drinks more than you expect', 'Leave-in on soaking wet hair, then seal with a light oil on top'],
+    'Between washes': ['Detangle only when wet and slippery with conditioner, never dry', 'Protective styles give your hair a rest from daily manipulation', 'Satin bonnet or pillowcase at night, every night']
+  }
+};
+
+const HAIR_REMEDIES = {
+  frizz: [
+    { name: 'Coconut oil, pre-wash', how: 'Warm slightly, work through lengths an hour before washing, then shampoo out. Once a week.' },
+    { name: 'Aloe vera gel', how: 'A small amount smoothed over damp lengths. Patch test behind your ear for 24 hours first.' },
+    { name: 'Rice water rinse', how: 'Soak rice 30 minutes, strain, pour over hair after conditioning, rinse out. Once a fortnight is plenty.' }
+  ],
+  fall: [
+    { name: 'Scalp massage', how: 'Five minutes with your fingertips, dry or with a little oil. Costs nothing and is genuinely relaxing.' },
+    { name: 'Amla or curry leaf oil', how: 'Warm, massage into the scalp, leave an hour, wash out. Once or twice a week.' },
+    { name: 'Methi (fenugreek) mask', how: 'Soak overnight, grind to a paste, apply to scalp for 20 minutes, rinse. Patch test first.' }
+  ],
+  dry: [
+    { name: 'Coconut or almond oil on ends', how: 'A few drops on damp ends after washing. Ends only, not scalp.' },
+    { name: 'Yoghurt mask', how: 'Plain curd through the lengths for 20 minutes, rinse with cool water. Once a week.' },
+    { name: 'Pre-wash oiling', how: 'Oil an hour before you shampoo so the wash strips less from your lengths.' }
+  ],
+  dull: [
+    { name: 'Cool final rinse', how: 'Finish every wash with the coolest water you can stand. Free, and the shine difference is visible.' },
+    { name: 'Diluted apple cider vinegar rinse', how: 'One tablespoon in a mug of water, poured through, rinsed out. Once a month, no more.' },
+    { name: 'Hibiscus mask', how: 'Grind fresh petals with a little water, apply for 20 minutes, rinse. Patch test first.' }
+  ],
+  scalp: [
+    { name: 'Aloe vera gel on the scalp', how: 'Thin layer, 20 minutes, rinse. Calming without stripping. Patch test behind your ear first.' },
+    { name: 'Gentle coconut oil massage', how: 'Warm, massage in, leave 30 minutes, wash out. Skip if oil makes flaking worse for you.' },
+    { name: 'Lukewarm washes', how: 'Hot water aggravates an unhappy scalp more than most products do.' }
+  ]
+};
+
+const HAIR_AVOID = [
+  'Undiluted lemon juice on the scalp — acidic enough to irritate, and it lightens hair patchily in the sun.',
+  'Raw onion juice straight on the scalp without a patch test — it burns and itches for a lot of people.',
+  'Very hot water — it roughs up the outer layer of every strand, which is what leaves hair dull and frizzy.',
+  'Brushing hair hard while it is soaking wet — hair is at its weakest wet, and this is where most breakage happens.',
+  'Tight ponytails and braids pulled the same way every day — steady tension thins the hairline over months.',
+  'Heat styling without a heat protectant — even one pass on high heat roughs up the cuticle for good.'
+];
+
+const HAIR_LIFESTYLE = {
+  washFreq: {
+    daily: 'Washing daily strips the oil your scalp keeps making — which often pushes it to make more. Stretching to alternate days usually settles it within a couple of weeks.',
+    often: 'Two or three washes a week suits most hair types well. No change needed here.',
+    weekly: 'Weekly washing is fine, especially for curly and coily hair — just be thorough at the scalp when you do.',
+    rare: 'Going longer than a week can let buildup sit on the scalp. If it feels itchy or heavy, that is usually why.'
+  },
+  heat: {
+    often: 'Frequent heat and colour is the single biggest thing working against your hair right now. Heat protectant every time, and the lowest setting that actually works, buys you a lot.',
+    sometimes: 'Occasional heat is fine — just never skip the heat protectant, even for one quick pass.',
+    never: 'Skipping heat entirely is doing quiet, real work for your hair.'
+  },
+  scalp: {
+    oily: 'A quickly greasy scalp does better with thorough scalp washing and lighter conditioner on the roots — not with washing more often.',
+    dry: 'A dry, tight scalp usually wants gentler shampoo and lukewarm water more than it wants extra oil.',
+    flaky: 'Flaking that keeps returning despite gentler washing is worth showing a dermatologist rather than treating with more home remedies.',
+    normal: 'Your scalp sounds comfortable — keep whatever you are doing.'
+  }
+};
+
+const HAIR_STYLING = {
+  straight: [
+    { name: 'Root lift without heat', how: 'Part your hair on the opposite side from usual while it dries. Instant volume, no tools.' },
+    { name: 'Cool shot to finish', how: 'If you blow dry, end with the cool button for a few seconds — it sets the shape and adds shine.' },
+    { name: 'Light hands with product', how: 'Straight hair goes flat quickly. Keep serums and oils to the last two inches only.' },
+    { name: 'Loose overnight braid', how: 'A soft braid gives you a gentle bend by morning with no heat at all.' }
+  ],
+  wavy: [
+    { name: 'Scrunch and leave alone', how: 'Scrunch a light gel or cream into soaking wet hair, then do not touch it until it is fully dry.' },
+    { name: 'Plopping', how: 'Wrap wet hair up in a cotton t-shirt for 15-20 minutes. Encourages the wave and cuts drying time.' },
+    { name: 'Cast breaking', how: 'Once dry, scrunch out the crunchy gel cast with your palms — you keep the shape, lose the stiffness.' },
+    { name: 'Diffuse on low', how: 'If you dry it, use a diffuser on low heat and low speed, cupping sections upward.' }
+  ],
+  curly: [
+    { name: 'Apply to soaking wet hair', how: 'Leave-in and gel go on while hair is dripping. On damp hair the curls clump far less.' },
+    { name: 'Praying hands, then scrunch', how: 'Smooth product down the length between flat palms first, then scrunch upward to set the spiral.' },
+    { name: 'Diffuse without disturbing', how: 'Low heat, low speed, hold the diffuser still against each section rather than moving it around.' },
+    { name: 'Refresh, do not rewash', how: 'A spray bottle of water and a little leave-in revives day-three curls without a full wash.' }
+  ],
+  coily: [
+    { name: 'Style in sections', how: 'Four to six sections. It takes longer but the definition and evenness are much better.' },
+    { name: 'Leave-in then seal', how: 'Water-based leave-in first, then a light oil or butter on top to lock the moisture in.' },
+    { name: 'Twist-outs and braid-outs', how: 'Twist or braid damp sections, let them dry fully, then unravel gently for stretched definition.' },
+    { name: 'Protective styles with loose tension', how: 'Braids and twists give your hair a rest — but never so tight that your scalp stings.' }
+  ]
+};
+
+const HAIR_SEE_DOCTOR = [
+  'Hair coming out in patches, or a part that is visibly widening over a few months.',
+  'A scalp that is sore, painful, or has flaking that keeps returning however gently you wash.',
+  'Sudden heavy shedding that starts within a few weeks, especially after illness or a big change.'
+];
+
+function buildLocalHairPlan(answers){
+  const type = answers.hairType || 'straight';
+  const concern = answers.concern || 'frizz';
+  const daily = HAIR_DAILY[type] || HAIR_DAILY.straight;
+  const lifestyle = [
+    HAIR_LIFESTYLE.washFreq[answers.washFreq],
+    HAIR_LIFESTYLE.heat[answers.heat],
+    HAIR_LIFESTYLE.scalp[answers.scalp]
+  ].filter(Boolean);
+
+  const typeWord = { straight:'straight', wavy:'wavy', curly:'curly', coily:'coily' }[type];
+  return {
+    summary: `For ${typeWord} hair: ` + (HAIR_SUMMARY[concern] || HAIR_SUMMARY.frizz),
+    daily: Object.entries(daily).map(([time, steps]) => ({ time, steps })),
+    remedies: HAIR_REMEDIES[concern] || HAIR_REMEDIES.frizz,
+    avoid: HAIR_AVOID,
+    lifestyle,
+    styling: HAIR_STYLING[type] || HAIR_STYLING.straight,
+    seeDoctor: HAIR_SEE_DOCTOR
+  };
+}
+
 /* ---------- natural care guide: optional AI plan ---------- */
 
-async function fetchRemotePlan(answers, skinType){
+async function fetchRemotePlan(topic, answers, skinType){
   const cfg = CFG.supabase;
   if (!cfg?.url || !cfg?.anonKey) return null;
 
@@ -850,7 +1034,7 @@ async function fetchRemotePlan(answers, skinType){
         'Authorization': `Bearer ${cfg.anonKey}`
       },
       // Note what is NOT here: the photo. Only derived text leaves the device.
-      body: JSON.stringify({ skinType, answers }),
+      body: JSON.stringify({ topic, skinType, answers }),
       signal: controller.signal
     });
     if (!res.ok) return null;
@@ -864,14 +1048,19 @@ async function fetchRemotePlan(answers, skinType){
   }
 }
 
-function planLooksValid(plan){
-  return !!plan
+function planLooksValid(plan, topic){
+  const base = !!plan
     && typeof plan.summary === 'string'
     && Array.isArray(plan.daily) && plan.daily.length
     && Array.isArray(plan.remedies) && plan.remedies.length
     && Array.isArray(plan.avoid) && plan.avoid.length
     && Array.isArray(plan.lifestyle)
     && Array.isArray(plan.seeDoctor) && plan.seeDoctor.length;
+  // Hair plans carry a styling section; without it the styling button would
+  // open an empty panel, so treat a styling-less hair plan as invalid and
+  // fall back to the on-device one.
+  if (topic === 'hair') return base && Array.isArray(plan.styling) && plan.styling.length > 0;
+  return base;
 }
 
 /* ---------- UI: elements ---------- */
@@ -1106,6 +1295,7 @@ function renderResults(r){
       <button class="btn btn-primary" id="guideBtn">Build my natural care plan</button>
     </div>
     <div class="row"><button class="btn btn-ghost" id="startOverBtn">Start over</button></div>
+    <button class="linkbtn" id="hairFromResults">Get a hair care plan too →</button>
   `;
 
   // Fill the bars on the next frame so the width transition actually runs.
@@ -1115,7 +1305,8 @@ function renderResults(r){
     });
   });
 
-  document.getElementById('guideBtn').addEventListener('click', () => startGuide(r.skinType));
+  document.getElementById('guideBtn').addEventListener('click', () => startGuide('skin', r.skinType));
+  document.getElementById('hairFromResults').addEventListener('click', () => startGuide('hair', r.skinType));
 
   document.getElementById('startOverBtn').addEventListener('click', () => {
     hide(els.resultsCard); hide(els.guideCard); show(els.captureCard); phaseIdle();
@@ -1125,63 +1316,90 @@ function renderResults(r){
 
 /* ---------- natural care guide: flow ---------- */
 
-let guideState = { step: 0, answers: {}, skinType: 'Normal' };
+const TOPICS = {
+  skin: {
+    label: 'Natural care plan',
+    questions: GUIDE_QUESTIONS,
+    build: (answers, skinType) => buildLocalPlan(answers, skinType)
+  },
+  hair: {
+    label: 'Hair care plan',
+    questions: HAIR_QUESTIONS,
+    build: (answers) => buildLocalHairPlan(answers)
+  }
+};
 
-function startGuide(skinType){
-  guideState = { step: 0, answers: {}, skinType };
-  hide(els.resultsCard);
+let guideState = { topic: 'skin', step: 0, answers: {}, skinType: 'Normal' };
+
+function startGuide(topic, skinType){
+  guideState = { topic, step: 0, answers: {}, skinType: skinType || guideState.skinType };
+  hide(els.captureCard); hide(els.resultsCard);
   show(els.guideCard);
   renderQuestion();
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
 function renderQuestion(){
-  const q = GUIDE_QUESTIONS[guideState.step];
-  const dots = GUIDE_QUESTIONS
+  const topic = TOPICS[guideState.topic];
+  const q = topic.questions[guideState.step];
+  const dots = topic.questions
     .map((_, i) => `<i class="${i <= guideState.step ? 'done' : ''}"></i>`).join('');
 
   els.guideCard.innerHTML = `
     <div class="q-progress">${dots}</div>
-    <p class="sec-title">Natural care plan</p>
+    <p class="sec-title">${escapeHtml(topic.label)}</p>
     <p class="q-text">${escapeHtml(q.text)}</p>
     <div class="q-opts">
       ${q.options.map(o => `<button class="q-opt" data-value="${escapeHtml(o.value)}">${escapeHtml(o.label)}</button>`).join('')}
     </div>
-    ${guideState.step > 0 ? '<button class="q-back" id="qBack">← Back</button>' : ''}
+    <button class="q-back" id="qBack">${guideState.step > 0 ? '← Back' : '← Cancel'}</button>
   `;
 
   els.guideCard.querySelectorAll('.q-opt').forEach(btn => {
     btn.addEventListener('click', () => {
       guideState.answers[q.key] = btn.dataset.value;
       guideState.step++;
-      if (guideState.step >= GUIDE_QUESTIONS.length) buildPlan();
+      if (guideState.step >= topic.questions.length) buildPlan();
       else renderQuestion();
     });
   });
 
-  const back = document.getElementById('qBack');
-  if (back) back.addEventListener('click', () => { guideState.step--; renderQuestion(); });
+  document.getElementById('qBack').addEventListener('click', () => {
+    if (guideState.step > 0){ guideState.step--; renderQuestion(); }
+    else leaveGuide();
+  });
+}
+
+// Back out to wherever the user came from: results if they have a read, the
+// capture screen if they went straight to hair without taking a photo.
+function leaveGuide(){
+  hide(els.guideCard);
+  if (els.resultsCard.innerHTML.trim()) show(els.resultsCard);
+  else { show(els.captureCard); phaseIdle(); }
+  window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
 async function buildPlan(){
+  const topic = TOPICS[guideState.topic];
   els.guideCard.innerHTML = `
-    <p class="sec-title">Natural care plan</p>
+    <p class="sec-title">${escapeHtml(topic.label)}</p>
     <p class="status" style="text-align:left">Putting your plan together…</p>
   `;
 
-  const remote = await fetchRemotePlan(guideState.answers, guideState.skinType);
-  const useRemote = planLooksValid(remote);
-  const plan = useRemote ? remote : buildLocalPlan(guideState.answers, guideState.skinType);
+  const remote = await fetchRemotePlan(guideState.topic, guideState.answers, guideState.skinType);
+  const useRemote = planLooksValid(remote, guideState.topic);
+  const plan = useRemote ? remote : topic.build(guideState.answers, guideState.skinType);
   renderPlan(plan, useRemote);
 }
 
 function renderPlan(plan, fromAI){
+  const isHair = guideState.topic === 'hair';
   const source = fromAI
     ? 'Written for you by Claude, from your answers — your photo was never sent.'
     : 'Built on your device from your answers — nothing was sent anywhere.';
 
   els.guideCard.innerHTML = `
-    <p class="sec-title">Your natural care plan</p>
+    <p class="sec-title">${isHair ? 'Your hair care plan' : 'Your natural care plan'}</p>
     <p class="plan-src">${escapeHtml(source)}</p>
     <p class="plan-lede">${escapeHtml(plan.summary)}</p>
 
@@ -1201,7 +1419,9 @@ function renderPlan(plan, fromAI){
           <div class="rem-name">${escapeHtml(r.name)}</div>
           <div class="rem-how">${escapeHtml(r.how)}</div>
         </div>`).join('')}
-      <p class="sec-note">Patch test anything new on your inner forearm for 24 hours before it goes near your face.</p>
+      <p class="sec-note">${isHair
+        ? 'Patch test anything new behind your ear or on your inner arm for 24 hours before putting it through your hair.'
+        : 'Patch test anything new on your inner forearm for 24 hours before it goes near your face.'}</p>
     </div>
 
     <div class="sec">
@@ -1215,6 +1435,12 @@ function renderPlan(plan, fromAI){
       <ul class="bullets">${plan.lifestyle.map(l => `<li>${escapeHtml(l)}</li>`).join('')}</ul>
     </div>` : ''}
 
+    ${isHair && Array.isArray(plan.styling) && plan.styling.length ? `
+    <div class="sec" id="stylingSec">
+      <p class="sec-title">Styling</p>
+      <div class="row"><button class="btn btn-ghost" id="stylingBtn">Show me styling tips</button></div>
+    </div>` : ''}
+
     <div class="sec">
       <p class="sec-title">Worth seeing a dermatologist about</p>
       <div class="doc-box">
@@ -1224,16 +1450,28 @@ function renderPlan(plan, fromAI){
 
     <p class="fine">Habits and gentle home care — not a treatment, and not a substitute for a dermatologist. Give any change a few weeks before judging it.</p>
     <div class="row">
-      <button class="btn btn-ghost" id="backToResults">Back to results</button>
+      <button class="btn btn-ghost" id="leaveGuideBtn">Back</button>
       <button class="btn btn-ghost" id="redoGuide">Redo</button>
     </div>
   `;
 
-  document.getElementById('backToResults').addEventListener('click', () => {
-    hide(els.guideCard); show(els.resultsCard);
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  });
-  document.getElementById('redoGuide').addEventListener('click', () => startGuide(guideState.skinType));
+  const stylingBtn = document.getElementById('stylingBtn');
+  if (stylingBtn){
+    stylingBtn.addEventListener('click', () => {
+      document.getElementById('stylingSec').innerHTML = `
+        <p class="sec-title">Styling for your hair type</p>
+        ${plan.styling.map(s => `
+          <div class="rem-card">
+            <div class="rem-name">${escapeHtml(s.name)}</div>
+            <div class="rem-how">${escapeHtml(s.how)}</div>
+          </div>`).join('')}
+        <p class="sec-note">Whenever heat is involved, use a heat protectant first and the lowest setting that actually works.</p>
+      `;
+    });
+  }
+
+  document.getElementById('leaveGuideBtn').addEventListener('click', leaveGuide);
+  document.getElementById('redoGuide').addEventListener('click', () => startGuide(guideState.topic, guideState.skinType));
 }
 
 /* ---------- run the read ---------- */
@@ -1275,6 +1513,7 @@ async function runRead(){
 
 els.cameraBtn.addEventListener('click', phaseCamera);
 els.uploadBtn.addEventListener('click', () => els.fileInput.click());
+document.getElementById('hairEntryBtn').addEventListener('click', () => { stopCamera(); startGuide('hair'); });
 els.fileInput.addEventListener('change', (e) => {
   const file = e.target.files?.[0];
   if (!file) return;
