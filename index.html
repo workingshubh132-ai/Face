@@ -3,24 +3,21 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="color-scheme" content="light">
+<meta name="color-scheme" content="dark">
 <title>Skinprint — on-device skin read</title>
 <style>
   :root{
-    --bg:#FAF9F6;
-    --surface:#FFFFFF;
-    --ink:#17171A;
-    --ink-soft:#6E6B66;
-    --rose:#D8465F;
-    --rose-deep:#A8324A;
-    --rose-soft:#FBE4E8;
-    --trust:#2F6F5E;
-    --trust-soft:#E4F0EC;
-    --line:#ECE8E2;
-    --radius-lg:22px;
-    --radius-md:14px;
+    --bg:#0A0A0C;
+    --surface:#141417;
+    --surface-2:#1C1C20;
+    --line:#2A2A30;
+    --text:#F4F2EF;
+    --text-dim:#918D87;
+    --accent:#FF6A3D;
+    --accent-soft:#FF9A6B;
+    --good:#4ED9A4;
+    --radius:18px;
     --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
-    --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;
   }
 
   *{ box-sizing:border-box; }
@@ -29,119 +26,163 @@
   html,body{
     margin:0; padding:0;
     background:var(--bg);
-    color:var(--ink);
+    color:var(--text);
     font-family:var(--sans);
     -webkit-font-smoothing:antialiased;
   }
 
-  .shell{ max-width:480px; margin:0 auto; padding:30px 18px 44px; }
+  .shell{ max-width:520px; margin:0 auto; padding:26px 18px 48px; }
 
-  .masthead{ display:flex; flex-direction:column; gap:3px; margin-bottom:22px; }
-  .wordmark{ font-weight:700; font-size:1.55rem; letter-spacing:-0.01em; }
-  .wordmark::after{ content:''; display:inline-block; width:7px; height:7px; border-radius:50%; background:var(--rose); margin-left:6px; vertical-align:middle; }
-  .tagline{ font-family:var(--mono); font-size:0.64rem; letter-spacing:0.09em; color:var(--ink-soft); text-transform:uppercase; }
-
-  .card{
-    background:var(--surface);
-    border-radius:var(--radius-lg);
-    padding:22px;
-    box-shadow:0 1px 2px rgba(23,23,26,0.04), 0 16px 32px -20px rgba(23,23,26,0.25);
+  /* ---------- masthead ---------- */
+  .masthead{ display:flex; align-items:center; justify-content:space-between; margin-bottom:24px; }
+  .wordmark{ font-size:1.45rem; font-weight:700; letter-spacing:-0.02em; }
+  .wordmark b{ color:var(--accent); }
+  .badge{
+    font-size:0.66rem; font-weight:600; letter-spacing:0.08em; text-transform:uppercase;
+    color:var(--text-dim); border:1px solid var(--line); border-radius:999px; padding:5px 10px;
   }
 
-  .consent{ font-size:0.83rem; color:var(--ink-soft); line-height:1.55; margin:0 0 12px; }
-  .howitworks{ margin:0 0 16px; font-size:0.83rem; color:var(--ink-soft); }
-  .howitworks summary{ cursor:pointer; color:var(--rose-deep); font-weight:600; }
-  .howitworks summary::marker{ color:var(--rose-deep); }
-  .howitworks p{ line-height:1.55; margin:8px 0 0; }
+  /* ---------- cards ---------- */
+  .card{ background:var(--surface); border:1px solid var(--line); border-radius:var(--radius); padding:20px; }
 
+  .lede{ font-size:0.95rem; line-height:1.6; color:var(--text-dim); margin:0 0 14px; }
+  .lede strong{ color:var(--text); font-weight:600; }
+
+  details.how{ margin:0 0 18px; }
+  details.how summary{
+    cursor:pointer; font-size:0.86rem; font-weight:600; color:var(--accent);
+    list-style:none; display:inline-flex; align-items:center; gap:6px;
+  }
+  details.how summary::-webkit-details-marker{ display:none; }
+  details.how summary::after{ content:'+'; font-size:1rem; line-height:1; }
+  details.how[open] summary::after{ content:'−'; }
+  details.how p{ font-size:0.88rem; line-height:1.6; color:var(--text-dim); margin:10px 0 0; }
+
+  /* ---------- viewfinder ---------- */
   .viewfinder{
-    position:relative; width:100%; aspect-ratio:1/1;
-    border-radius:16px; overflow:hidden; background:var(--trust);
+    position:relative; width:100%; aspect-ratio:4/5;
+    border-radius:14px; overflow:hidden; background:#000;
     margin-bottom:16px;
   }
   .viewfinder > *{ position:absolute; inset:0; }
-  #video, #stillFrame{ width:100%; height:100%; object-fit:cover; background:var(--trust); }
+  #video, #stillFrame{ width:100%; height:100%; object-fit:cover; }
   #video{ transform:scaleX(-1); }
 
-  #placeholderGlyph{ display:flex; align-items:center; justify-content:center; color:rgba(255,255,255,0.4); }
+  #emptyState{ display:flex; flex-direction:column; align-items:center; justify-content:center; gap:10px; color:#3E3E45; }
+  #emptyState span{ font-size:0.8rem; color:#55555E; }
 
-  .faceGuide{ pointer-events:none; }
-  .faceGuide .oval{ position:absolute; inset:11% 23%; border:2px dashed rgba(255,255,255,0.65); border-radius:50%/58%; }
+  .guide{ pointer-events:none; }
+  .guide::before{
+    content:''; position:absolute; inset:9% 21%;
+    border:1.5px solid rgba(255,255,255,0.45); border-radius:50%/58%;
+  }
 
   .pins{ pointer-events:none; }
   .pin{
-    position:absolute; transform:translate(-50%,-50%) scale(0.55); opacity:0;
-    display:flex; flex-direction:column; align-items:center; gap:4px;
-    transition:opacity .35s ease, transform .35s cubic-bezier(.34,1.56,.64,1);
+    position:absolute; transform:translate(-50%,-50%) scale(0.4); opacity:0;
+    display:flex; flex-direction:column; align-items:center; gap:5px;
+    transition:opacity .3s ease, transform .4s cubic-bezier(.34,1.56,.64,1);
   }
   .pin.on{ opacity:1; transform:translate(-50%,-50%) scale(1); }
-  .pin-dot{
-    width:12px; height:12px; border-radius:50%; background:var(--rose);
-    box-shadow:0 0 0 5px rgba(216,70,95,0.25);
+  .pin i{
+    width:9px; height:9px; border-radius:50%; background:var(--accent);
+    box-shadow:0 0 0 4px rgba(255,106,61,0.22), 0 0 14px rgba(255,106,61,0.7);
   }
-  .pin-tag{
-    font-family:var(--mono); font-size:0.58rem; letter-spacing:0.05em;
-    background:rgba(23,23,26,0.86); color:#fff; padding:2px 6px; border-radius:4px; white-space:nowrap;
+  .pin span{
+    font-size:0.58rem; font-weight:600; letter-spacing:0.07em; text-transform:uppercase;
+    background:rgba(10,10,12,0.82); border:1px solid var(--line);
+    padding:3px 7px; border-radius:5px; white-space:nowrap;
   }
 
-  .status{ min-height:1.3em; font-family:var(--mono); font-size:0.75rem; color:var(--rose-deep); text-align:center; margin:0 0 14px; }
+  .status{ min-height:1.2em; font-size:0.82rem; color:var(--accent); text-align:center; margin:0 0 14px; letter-spacing:0.01em; }
 
+  /* ---------- buttons ---------- */
   .row{ display:flex; gap:10px; }
   .btn{
-    flex:1; border:none; border-radius:var(--radius-md); padding:13px 16px;
-    font-family:var(--sans); font-weight:600; font-size:0.92rem;
-    cursor:pointer; transition:transform .15s ease, background .15s ease;
+    flex:1; border:none; border-radius:12px; padding:15px 18px;
+    font-family:var(--sans); font-weight:650; font-size:0.95rem; cursor:pointer;
+    transition:transform .12s ease, background .15s ease, border-color .15s ease;
   }
-  .btn:active{ transform:scale(0.97); }
-  .btn-fill{ background:var(--rose); color:#fff; }
-  .btn-fill:hover{ background:var(--rose-deep); }
-  .btn-outline{ background:transparent; color:var(--rose-deep); border:1.5px solid var(--line); }
-  .btn:focus-visible{ outline:2px solid var(--rose); outline-offset:2px; }
+  .btn:active{ transform:scale(0.975); }
+  .btn-primary{ background:var(--accent); color:#140A06; }
+  .btn-primary:hover{ background:var(--accent-soft); }
+  .btn-ghost{ background:transparent; color:var(--text); border:1px solid var(--line); }
+  .btn-ghost:hover{ border-color:#43434B; }
+  .btn:focus-visible{ outline:2px solid var(--accent); outline-offset:3px; }
 
   input[type=file]{ display:none; }
 
-  /* Results */
-  .eyebrow{ font-family:var(--mono); font-size:0.65rem; letter-spacing:0.1em; color:var(--ink-soft); text-transform:uppercase; margin:24px 0 8px; }
-  .eyebrow:first-child{ margin-top:0; }
+  /* ---------- results ---------- */
+  .sec{ margin-top:30px; }
+  .sec-title{
+    font-size:0.68rem; font-weight:700; letter-spacing:0.12em; text-transform:uppercase;
+    color:var(--text-dim); margin:0 0 12px;
+  }
+  .sec-note{ font-size:0.79rem; color:var(--text-dim); margin:10px 0 0; line-height:1.5; }
 
-  .hero{ background:var(--rose-soft); border-radius:16px; padding:18px 20px; }
-  .hero-name{ font-weight:700; font-size:1.6rem; color:var(--rose-deep); line-height:1.1; }
-  .hero-note{ font-size:0.87rem; color:var(--ink-soft); line-height:1.5; margin:6px 0 0; }
+  .hero-type{ font-size:2.7rem; font-weight:700; letter-spacing:-0.03em; line-height:1; margin:0; }
+  .hero-type em{ font-style:normal; color:var(--accent); }
+  .hero-sum{ font-size:0.98rem; line-height:1.6; color:var(--text-dim); margin:12px 0 0; }
 
-  .region-grid{ display:grid; grid-template-columns:1fr 1fr; gap:10px; }
-  .region-card{ background:var(--bg); border-radius:12px; padding:11px 13px; }
-  .region-card .region-name{ font-family:var(--mono); font-size:0.62rem; letter-spacing:0.07em; color:var(--trust); margin-bottom:3px; }
-  .region-card .region-detail{ font-size:0.84rem; line-height:1.4; }
+  /* stat tiles */
+  .stats{ display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:20px; }
+  .stat{ background:var(--surface-2); border-radius:12px; padding:14px 16px; }
+  .stat-val{ font-size:1.5rem; font-weight:700; letter-spacing:-0.02em; }
+  .stat-lab{ font-size:0.72rem; color:var(--text-dim); margin-top:3px; line-height:1.35; }
 
-  .note-list{ margin:0; padding-left:1.2em; font-size:0.9rem; line-height:1.65; }
-  .note-list li{ margin-bottom:4px; }
+  /* bars */
+  .bars{ display:flex; flex-direction:column; gap:14px; }
+  .bar-row{ display:grid; grid-template-columns:82px 1fr 42px; align-items:center; gap:12px; }
+  .bar-lab{ font-size:0.82rem; color:var(--text-dim); }
+  .bar-track{ height:8px; background:var(--surface-2); border-radius:999px; overflow:hidden; }
+  .bar-fill{
+    height:100%; width:0; border-radius:999px;
+    background:linear-gradient(90deg, var(--accent-soft), var(--accent));
+    transition:width .8s cubic-bezier(.22,1,.36,1);
+  }
+  .bar-val{ font-size:0.78rem; font-weight:600; text-align:right; color:var(--text); font-variant-numeric:tabular-nums; }
 
-  .routine-grid{ display:grid; grid-template-columns:1fr 1fr; gap:16px; }
-  .routine-head{ font-family:var(--mono); font-size:0.68rem; letter-spacing:0.1em; color:var(--rose-deep); margin-bottom:8px; }
-  .routine-steps{ list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:8px; }
-  .routine-steps li{ position:relative; padding-left:16px; font-size:0.83rem; line-height:1.4; }
-  .routine-steps li::before{ content:''; position:absolute; left:0; top:6px; width:7px; height:7px; border-radius:50%; background:var(--trust); }
+  /* region notes */
+  .notes{ display:flex; flex-direction:column; gap:1px; background:var(--line); border-radius:12px; overflow:hidden; }
+  .note-item{ background:var(--surface); padding:13px 15px; }
+  .note-key{ font-size:0.7rem; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; color:var(--accent); margin-bottom:4px; }
+  .note-txt{ font-size:0.88rem; line-height:1.5; color:var(--text-dim); }
 
-  .ingredient-list{ display:flex; flex-direction:column; gap:8px; }
-  .ingredient-card{ background:var(--trust-soft); border-radius:12px; padding:11px 13px; border-left:3px solid var(--trust); }
-  .ingredient-list.muted .ingredient-card{ background:var(--bg); border-left-color:var(--ink-soft); }
-  .ingredient-name{ font-weight:600; font-size:0.88rem; }
-  .ingredient-note{ font-size:0.8rem; color:var(--ink-soft); margin-top:1px; line-height:1.4; }
-  .ingredient-brands{ font-size:0.78rem; margin-top:6px; line-height:1.4; }
-  .brands-label{ font-family:var(--mono); font-size:0.6rem; letter-spacing:0.06em; color:var(--trust); text-transform:uppercase; margin-right:5px; }
-  .ingredient-list.muted .brands-label{ color:var(--ink-soft); }
+  .bullets{ margin:0; padding:0; list-style:none; display:flex; flex-direction:column; gap:11px; }
+  .bullets li{ position:relative; padding-left:18px; font-size:0.92rem; line-height:1.55; color:var(--text-dim); }
+  .bullets li::before{ content:''; position:absolute; left:0; top:8px; width:6px; height:6px; border-radius:50%; background:var(--line); }
 
-  .avail-note{ font-size:0.76rem; color:var(--ink-soft); line-height:1.5; margin:10px 0 0; }
+  /* routine */
+  .routine{ display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+  .rt-col{ background:var(--surface-2); border-radius:12px; padding:15px; }
+  .rt-head{ font-size:0.72rem; font-weight:700; letter-spacing:0.1em; color:var(--accent); margin-bottom:12px; }
+  .rt-col ol{ margin:0; padding:0; list-style:none; counter-reset:s; display:flex; flex-direction:column; gap:11px; }
+  .rt-col li{ counter-increment:s; position:relative; padding-left:24px; font-size:0.85rem; line-height:1.45; color:var(--text-dim); }
+  .rt-col li::before{
+    content:counter(s); position:absolute; left:0; top:-1px;
+    width:17px; height:17px; border-radius:50%; background:var(--line); color:var(--text);
+    font-size:0.65rem; font-weight:700; display:flex; align-items:center; justify-content:center;
+  }
 
-  .fineprint{ font-size:0.79rem; color:var(--ink-soft); margin:22px 0 18px; line-height:1.5; }
+  /* ingredients */
+  .ing{ display:flex; flex-direction:column; gap:10px; }
+  .ing-card{ background:var(--surface-2); border-radius:12px; padding:14px 16px; border-left:2px solid var(--accent); }
+  .ing.later .ing-card{ border-left-color:var(--line); }
+  .ing-name{ font-size:0.92rem; font-weight:650; }
+  .ing-note{ font-size:0.83rem; color:var(--text-dim); margin-top:3px; line-height:1.45; }
+  .ing-buy{ font-size:0.83rem; margin-top:9px; color:var(--text); line-height:1.45; }
+  .ing-buy b{ font-size:0.66rem; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; color:var(--good); margin-right:7px; }
+  .ing.later .ing-buy b{ color:var(--text-dim); }
+
+  .fine{ font-size:0.82rem; color:var(--text-dim); line-height:1.55; margin:28px 0 20px; }
 
   #errorCard{ text-align:center; }
-  #errorCard p{ font-size:0.92rem; color:var(--ink-soft); line-height:1.55; margin:0 0 16px; }
+  #errorCard p{ font-size:0.95rem; color:var(--text-dim); line-height:1.6; margin:0 0 18px; }
 
-  .disclaimer{ font-size:0.72rem; color:var(--ink-soft); text-align:center; margin-top:20px; line-height:1.5; }
+  .foot{ font-size:0.75rem; color:#68645F; text-align:center; margin-top:22px; line-height:1.55; }
 
   @media (prefers-reduced-motion:reduce){
-    .pin, .btn{ transition:none !important; }
+    .pin,.btn,.bar-fill{ transition:none !important; }
   }
 </style>
 </head>
@@ -149,43 +190,44 @@
 <div class="shell">
 
   <header class="masthead">
-    <span class="wordmark">Skinprint</span>
-    <span class="tagline">On-device skin read</span>
+    <div class="wordmark">Skinprint<b>.</b></div>
+    <div class="badge">Runs on your device</div>
   </header>
 
   <section class="card" id="captureCard">
-    <p class="consent">Your photo is read in this browser tab and never leaves your device — nothing is uploaded, stored, or sent to a server.</p>
-    <details class="howitworks">
-      <summary>How this works</summary>
-      <p>Face detection runs on-device using a model loaded once from a CDN (MediaPipe). From there, this app measures shine, color and surface texture directly from the photo's pixels and compares each face region against your own facial average — it's pixel math, not an AI model reasoning about your skin. Think quick visual impression, not lab-grade measurement. Nothing about the photo is kept once the read finishes.</p>
+    <p class="lede"><strong>Nothing leaves this tab.</strong> Your photo is read here in the browser — never uploaded, never stored, never sent to a server.</p>
+    <details class="how">
+      <summary>How the read works</summary>
+      <p>Face detection runs on-device with a model fetched once from a CDN. From there this app measures shine, colour and surface texture straight from the photo's pixels, comparing each region of your face against your own facial average. It's pixel maths, not an AI reasoning about your skin — a quick visual impression, not a lab measurement. The photo is discarded when the read finishes.</p>
     </details>
 
-    <div class="viewfinder" id="viewfinder">
+    <div class="viewfinder">
       <video id="video" autoplay playsinline muted hidden></video>
       <img id="stillFrame" hidden alt="Your photo">
-      <div id="placeholderGlyph">
-        <svg width="52" height="52" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-          <circle cx="12" cy="8" r="3.4"/>
-          <path d="M5 20c0-3.9 3.13-7 7-7s7 3.1 7 7"/>
+      <div id="emptyState">
+        <svg width="46" height="46" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4">
+          <circle cx="12" cy="8.5" r="3.6"/>
+          <path d="M4.5 20.5c0-4.1 3.36-7.5 7.5-7.5s7.5 3.4 7.5 7.5"/>
         </svg>
+        <span>Face the light, look straight ahead</span>
       </div>
-      <div class="faceGuide" id="faceGuide" hidden><div class="oval"></div></div>
+      <div class="guide" id="guide" hidden></div>
       <div class="pins" id="pins" hidden></div>
     </div>
 
     <p class="status" id="statusLine" aria-live="polite"></p>
 
     <div class="row" id="controlsIdle">
-      <button class="btn btn-fill" id="cameraBtn">Use camera</button>
-      <button class="btn btn-outline" id="uploadBtn">Upload a photo</button>
+      <button class="btn btn-primary" id="cameraBtn">Use camera</button>
+      <button class="btn btn-ghost" id="uploadBtn">Upload photo</button>
     </div>
     <div class="row" id="controlsCamera" hidden>
-      <button class="btn btn-fill" id="captureBtn">Capture</button>
-      <button class="btn btn-outline" id="cancelBtn">Cancel</button>
+      <button class="btn btn-primary" id="captureBtn">Capture</button>
+      <button class="btn btn-ghost" id="cancelBtn">Cancel</button>
     </div>
     <div class="row" id="controlsPreview" hidden>
-      <button class="btn btn-fill" id="analyzeBtn">Read my skin</button>
-      <button class="btn btn-outline" id="retakeBtn">Retake</button>
+      <button class="btn btn-primary" id="analyzeBtn">Read my skin</button>
+      <button class="btn btn-ghost" id="retakeBtn">Retake</button>
     </div>
 
     <input type="file" id="fileInput" accept="image/*" capture="user">
@@ -195,10 +237,10 @@
 
   <section class="card" id="errorCard" hidden>
     <p id="errorText"></p>
-    <div class="row"><button class="btn btn-fill" id="retryBtn">Try again</button></div>
+    <div class="row"><button class="btn btn-primary" id="retryBtn">Try again</button></div>
   </section>
 
-  <p class="disclaimer">Cosmetic guidance only, not a medical diagnosis. See a dermatologist about anything persistent or concerning.</p>
+  <p class="foot">Cosmetic guidance only — not a medical diagnosis. See a dermatologist about anything persistent or concerning.</p>
 
 </div>
 
@@ -435,6 +477,28 @@ function regionShineWord(z){
   return 'even';
 }
 
+/* ---------- display metrics (surfacing the numbers the read actually produced) ---------- */
+
+const BAR_LABELS = [
+  ['forehead', 'Forehead'],
+  ['tzone', 'Nose / T-zone'],
+  ['cheekL', 'Left cheek'],
+  ['cheekR', 'Right cheek'],
+  ['chin', 'Chin']
+];
+
+// Bars are relative, not absolute: each region is shown against the shiniest region in
+// this photo. The 0.01 floor keeps an all-matte face from being amplified into a
+// misleading full-scale bar just because one region happens to be marginally brighter.
+function buildBars(metrics){
+  const values = BAR_LABELS.map(([key]) => metrics.perRegion[key].shine);
+  const denom = Math.max(Math.max(...values), 0.01);
+  return BAR_LABELS.map(([key, label], i) => ({
+    label,
+    pct: clamp(Math.round((values[i] / denom) * 100), 0, 100)
+  }));
+}
+
 /* ---------- content templates (local only, no network) ---------- */
 
 const REGION_COPY = {
@@ -461,8 +525,8 @@ const ROUTINE = {
 };
 
 // Brand names, not exact SKUs: well-established brands commonly stocked at Indian
-// pharmacies/chemists and general stores, not a live inventory check. See the
-// disclaimer rendered under "Ingredients to look for" in the results view.
+// pharmacies/chemists and general stores, not a live inventory check. The results view
+// renders a disclaimer to that effect under "Ingredients to look for".
 const INGREDIENTS_NOW = {
   Normal: [
     { name: 'Hyaluronic acid', note: 'hydration without added weight', brands: "Neutrogena Hydro Boost, Minimalist, Pond's" },
@@ -550,6 +614,9 @@ function buildReading(canvas, rects){
   return {
     skinType: cls.skinType,
     typeSummary: TYPE_SUMMARY[cls.skinType],
+    bars: buildBars(metrics),
+    shinePct: Math.round(metrics.faceShine * 100),
+    texturePct: Math.round(metrics.faceTextureCV * 100),
     regions: {
       forehead: REGION_COPY.forehead[regionShineWord(shineZ[0])],
       t_zone: REGION_COPY.tzone[regionShineWord(shineZ[1])],
@@ -560,7 +627,7 @@ function buildReading(canvas, rects){
     routine: ROUTINE[cls.skinType],
     ingredientsNow: INGREDIENTS_NOW[cls.skinType],
     ingredientsLater: INGREDIENTS_LATER[cls.skinType],
-    footnote: 'This read comes from color and shine patterns in the photo, not a lab measurement. See a dermatologist about anything persistent or concerning.'
+    footnote: 'This read comes from colour and shine patterns in the photo, not a lab measurement. See a dermatologist about anything persistent or concerning.'
   };
 }
 
@@ -569,8 +636,8 @@ function buildReading(canvas, rects){
 const els = {
   video: document.getElementById('video'),
   still: document.getElementById('stillFrame'),
-  placeholder: document.getElementById('placeholderGlyph'),
-  faceGuide: document.getElementById('faceGuide'),
+  empty: document.getElementById('emptyState'),
+  guide: document.getElementById('guide'),
   pins: document.getElementById('pins'),
   status: document.getElementById('statusLine'),
   idle: document.getElementById('controlsIdle'),
@@ -606,7 +673,7 @@ function stopCamera(){
 
 function phaseIdle(){
   stopCamera();
-  hide(els.video); hide(els.still); show(els.placeholder); hide(els.faceGuide); hide(els.pins);
+  hide(els.video); hide(els.still); show(els.empty); hide(els.guide); hide(els.pins);
   show(els.idle); hide(els.camera); hide(els.preview);
   setStatus('');
 }
@@ -619,7 +686,7 @@ async function phaseCamera(){
   try{
     stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' }, audio: false });
     els.video.srcObject = stream;
-    hide(els.still); show(els.video); hide(els.placeholder); show(els.faceGuide); hide(els.pins);
+    hide(els.still); show(els.video); hide(els.empty); show(els.guide); hide(els.pins);
     hide(els.idle); show(els.camera); hide(els.preview);
     setStatus('');
   }catch(err){
@@ -632,7 +699,7 @@ function phasePreview(dataUrl){
   stopCamera();
   workingPhotoUrl = dataUrl;
   els.still.src = dataUrl;
-  show(els.still); hide(els.video); hide(els.placeholder); hide(els.faceGuide); hide(els.pins);
+  show(els.still); hide(els.video); hide(els.empty); hide(els.guide); hide(els.pins);
   hide(els.idle); hide(els.camera); show(els.preview);
   setStatus('');
 }
@@ -683,23 +750,20 @@ function toCanvas(dataUrl){
 function pinPositions(rects, imgW, imgH){
   const center = (rect, tag) => ({ tag, x: ((rect.x + rect.w / 2) / imgW) * 100, y: ((rect.y + rect.h / 2) / imgH) * 100 });
   return [
-    center(rects.forehead, 'FOREHEAD'),
-    center(rects.cheekL, 'L CHEEK'),
-    center(rects.cheekR, 'R CHEEK'),
-    center(rects.tzone, 'NOSE'),
-    center(rects.chin, 'CHIN')
+    center(rects.forehead, 'Forehead'),
+    center(rects.cheekL, 'L cheek'),
+    center(rects.cheekR, 'R cheek'),
+    center(rects.tzone, 'Nose'),
+    center(rects.chin, 'Chin')
   ];
 }
 
 function animatePins(positions){
-  els.pins.innerHTML = positions.map((p) => `
-    <div class="pin" style="left:${p.x}%; top:${p.y}%">
-      <span class="pin-dot"></span>
-      <span class="pin-tag">${p.tag}</span>
-    </div>`).join('');
+  els.pins.innerHTML = positions.map(p => `
+    <div class="pin" style="left:${p.x}%; top:${p.y}%"><i></i><span>${p.tag}</span></div>`).join('');
   show(els.pins);
   Array.from(els.pins.children).forEach((el, i) => {
-    setTimeout(() => el.classList.add('on'), 180 + i * 340);
+    setTimeout(() => el.classList.add('on'), 180 + i * 300);
   });
 }
 
@@ -721,59 +785,92 @@ function escapeHtml(str){
   return div.innerHTML;
 }
 
-function regionCard(label, text){
-  return `<div class="region-card"><div class="region-name">${label}</div><div class="region-detail">${escapeHtml(text)}</div></div>`;
-}
-
-function ingredientCard(item){
-  const note = item.note ? `<div class="ingredient-note">${escapeHtml(item.note)}</div>` : '';
-  return `<div class="ingredient-card">
-    <div class="ingredient-name">${escapeHtml(item.name)}</div>
-    ${note}
-    <div class="ingredient-brands"><span class="brands-label">Look for</span>${escapeHtml(item.brands)}</div>
+function barRow(bar){
+  return `<div class="bar-row">
+    <div class="bar-lab">${escapeHtml(bar.label)}</div>
+    <div class="bar-track"><div class="bar-fill" data-pct="${bar.pct}"></div></div>
+    <div class="bar-val">${bar.pct}%</div>
   </div>`;
 }
 
-function renderResults(reading){
-  const { regions, observations, routine, ingredientsNow, ingredientsLater } = reading;
+function noteItem(key, text){
+  return `<div class="note-item"><div class="note-key">${key}</div><div class="note-txt">${escapeHtml(text)}</div></div>`;
+}
 
+function ingCard(item){
+  const note = item.note ? `<div class="ing-note">${escapeHtml(item.note)}</div>` : '';
+  return `<div class="ing-card">
+    <div class="ing-name">${escapeHtml(item.name)}</div>
+    ${note}
+    <div class="ing-buy"><b>Look for</b>${escapeHtml(item.brands)}</div>
+  </div>`;
+}
+
+function renderResults(r){
   els.resultsCard.innerHTML = `
-    <div class="eyebrow">Your skin type</div>
-    <div class="hero">
-      <div class="hero-name">${escapeHtml(reading.skinType)}</div>
-      <p class="hero-note">${escapeHtml(reading.typeSummary)}</p>
+    <p class="sec-title">Your skin type</p>
+    <h2 class="hero-type"><em>${escapeHtml(r.skinType)}</em></h2>
+    <p class="hero-sum">${escapeHtml(r.typeSummary)}</p>
+
+    <div class="stats">
+      <div class="stat"><div class="stat-val">${r.shinePct}%</div><div class="stat-lab">of your face read as shine</div></div>
+      <div class="stat"><div class="stat-val">${r.texturePct}</div><div class="stat-lab">surface texture index</div></div>
     </div>
 
-    <div class="eyebrow">By region</div>
-    <div class="region-grid">
-      ${regionCard('FOREHEAD', regions.forehead)}
-      ${regionCard('T-ZONE', regions.t_zone)}
-      ${regionCard('CHEEKS', regions.cheeks)}
-      ${regionCard('CHIN', regions.chin)}
+    <div class="sec">
+      <p class="sec-title">Shine by region</p>
+      <div class="bars">${r.bars.map(barRow).join('')}</div>
+      <p class="sec-note">Each region measured against the shiniest area in your photo, so this is a relative profile rather than an absolute reading.</p>
     </div>
 
-    <div class="eyebrow">What stood out</div>
-    <ul class="note-list">${observations.map(o => `<li>${escapeHtml(o)}</li>`).join('')}</ul>
-
-    <div class="eyebrow">Your routine</div>
-    <div class="routine-grid">
-      <div><div class="routine-head">AM</div><ul class="routine-steps">${routine.am.map(s => `<li>${escapeHtml(s)}</li>`).join('')}</ul></div>
-      <div><div class="routine-head">PM</div><ul class="routine-steps">${routine.pm.map(s => `<li>${escapeHtml(s)}</li>`).join('')}</ul></div>
+    <div class="sec">
+      <p class="sec-title">What each area says</p>
+      <div class="notes">
+        ${noteItem('Forehead', r.regions.forehead)}
+        ${noteItem('T-zone', r.regions.t_zone)}
+        ${noteItem('Cheeks', r.regions.cheeks)}
+        ${noteItem('Chin', r.regions.chin)}
+      </div>
     </div>
 
-    <div class="eyebrow">Ingredients to look for</div>
-    <div class="ingredient-list">${ingredientsNow.map(ingredientCard).join('')}</div>
-    <p class="avail-note">Brand names are common, easy-to-find options at most Indian pharmacies and general stores — not a live stock check, and not an endorsement. Always confirm the ingredient list on the pack yourself.</p>
+    <div class="sec">
+      <p class="sec-title">What stood out</p>
+      <ul class="bullets">${r.observations.map(o => `<li>${escapeHtml(o)}</li>`).join('')}</ul>
+    </div>
 
-    <div class="eyebrow">Ease in slowly</div>
-    <div class="ingredient-list muted">${ingredientsLater.map(ingredientCard).join('')}</div>
+    <div class="sec">
+      <p class="sec-title">Your routine</p>
+      <div class="routine">
+        <div class="rt-col"><div class="rt-head">AM</div><ol>${r.routine.am.map(s => `<li>${escapeHtml(s)}</li>`).join('')}</ol></div>
+        <div class="rt-col"><div class="rt-head">PM</div><ol>${r.routine.pm.map(s => `<li>${escapeHtml(s)}</li>`).join('')}</ol></div>
+      </div>
+    </div>
 
-    <p class="fineprint">${escapeHtml(reading.footnote)}</p>
-    <div class="row"><button class="btn btn-outline" id="startOverBtn">Start over</button></div>
+    <div class="sec">
+      <p class="sec-title">Ingredients to look for</p>
+      <div class="ing">${r.ingredientsNow.map(ingCard).join('')}</div>
+      <p class="sec-note">Brands listed are common, easy-to-find options at Indian pharmacies and general stores — not a live stock check and not an endorsement. Always read the ingredient list on the pack yourself.</p>
+    </div>
+
+    <div class="sec">
+      <p class="sec-title">Ease in slowly</p>
+      <div class="ing later">${r.ingredientsLater.map(ingCard).join('')}</div>
+    </div>
+
+    <p class="fine">${escapeHtml(r.footnote)}</p>
+    <div class="row"><button class="btn btn-ghost" id="startOverBtn">Start over</button></div>
   `;
+
+  // Fill the bars on the next frame so the width transition actually runs.
+  requestAnimationFrame(() => {
+    els.resultsCard.querySelectorAll('.bar-fill').forEach(el => {
+      el.style.width = el.dataset.pct + '%';
+    });
+  });
 
   document.getElementById('startOverBtn').addEventListener('click', () => {
     hide(els.resultsCard); show(els.captureCard); phaseIdle();
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   });
 }
 
