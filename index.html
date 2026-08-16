@@ -4,22 +4,23 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="color-scheme" content="light">
-<title>Skinprint Free — on-device skin read</title>
+<title>Skinprint — on-device skin read</title>
 <style>
-  @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
-
   :root{
-    --paper:#F4F5F1;
-    --card:#FFFFFF;
-    --ink:#201C19;
-    --ink-soft:#6B645D;
-    --teal:#1E4B44;
-    --teal-deep:#12332E;
-    --blush:#E7B9AC;
-    --blush-soft:#F3DCD3;
-    --marker:#E24A2E;
-    --line:#DEDAD2;
-    --radius:18px;
+    --bg:#F6F2EA;
+    --surface:#FFFFFF;
+    --ink:#1E1B17;
+    --ink-mute:#7A7266;
+    --clay:#B0492B;
+    --clay-deep:#7C331C;
+    --sage:#4B5D46;
+    --sage-soft:#E7ECE1;
+    --amber:#D98E3B;
+    --line:#E4DED2;
+    --radius-lg:20px;
+    --radius-md:14px;
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;
   }
 
   *{ box-sizing:border-box; }
@@ -27,743 +28,781 @@
 
   html,body{
     margin:0; padding:0;
-    background:var(--paper);
+    background:var(--bg);
     color:var(--ink);
-    font-family:'IBM Plex Sans', sans-serif;
+    font-family:var(--sans);
     -webkit-font-smoothing:antialiased;
   }
 
-  .app{ max-width:460px; margin:0 auto; padding:26px 20px 44px; }
+  .shell{ max-width:480px; margin:0 auto; padding:28px 18px 40px; }
 
-  .topbar{ display:flex; align-items:baseline; justify-content:space-between; margin-bottom:22px; }
-  .wordmark{ font-family:'Space Grotesk', sans-serif; font-weight:700; font-size:1.5rem; letter-spacing:-0.02em; color:var(--ink); }
-  .tagline{ font-family:'IBM Plex Mono', monospace; font-size:0.66rem; letter-spacing:0.06em; color:var(--ink-soft); text-transform:uppercase; text-align:right; }
+  header.masthead{ display:flex; align-items:center; gap:12px; margin-bottom:20px; }
+  .mark{
+    width:36px; height:36px; border-radius:10px; background:var(--clay);
+    color:#fff; display:flex; align-items:center; justify-content:center;
+    font-weight:700; font-size:1.05rem; flex:none;
+  }
+  .masthead-text{ display:flex; flex-direction:column; }
+  .wordmark{ font-weight:700; font-size:1.28rem; letter-spacing:-0.01em; line-height:1.15; }
+  .tagline{ font-family:var(--mono); font-size:0.64rem; letter-spacing:0.08em; color:var(--ink-mute); text-transform:uppercase; }
 
-  .panel{
-    background:var(--card);
-    border-radius:var(--radius);
-    padding:22px;
-    box-shadow:0 1px 2px rgba(0,0,0,0.04), 0 10px 28px -14px rgba(32,28,25,0.18);
+  .card{
+    background:var(--surface);
+    border-radius:var(--radius-lg);
+    padding:20px;
+    box-shadow:0 1px 2px rgba(30,27,23,0.05), 0 14px 30px -18px rgba(30,27,23,0.28);
   }
 
-  .consent{ font-size:0.82rem; color:var(--ink-soft); line-height:1.55; margin:0 0 14px; }
-  details.privacy-details{ margin:0 0 16px; font-size:0.82rem; color:var(--ink-soft); }
-  details.privacy-details summary{ cursor:pointer; color:var(--teal); font-weight:500; }
-  details.privacy-details p{ line-height:1.55; margin:8px 0 0; }
+  .consent{ font-size:0.83rem; color:var(--ink-mute); line-height:1.55; margin:0 0 12px; }
+  .howitworks{ margin:0 0 16px; font-size:0.83rem; color:var(--ink-mute); }
+  .howitworks summary{ cursor:pointer; color:var(--clay); font-weight:600; }
+  .howitworks summary::marker{ color:var(--clay); }
+  .howitworks p{ line-height:1.55; margin:8px 0 0; }
 
-  .photo-frame{
-    position:relative;
-    width:100%;
-    aspect-ratio:1/1;
-    border-radius:14px;
-    overflow:hidden;
-    background:var(--teal-deep);
+  .viewfinder{
+    position:relative; width:100%; aspect-ratio:1/1;
+    border-radius:16px; overflow:hidden; background:var(--sage);
     margin-bottom:16px;
   }
-  .photo-frame > *{ position:absolute; }
-  #video, #preview{ inset:0; width:100%; height:100%; object-fit:contain; background:var(--teal-deep); }
+  .viewfinder > *{ position:absolute; inset:0; }
+  #video, #stillFrame{ width:100%; height:100%; object-fit:cover; background:var(--sage); }
   #video{ transform:scaleX(-1); }
-  #frameIcon{ inset:0; display:flex; align-items:center; justify-content:center; color:rgba(255,255,255,0.38); }
-  .face-guide{ inset:12% 24%; border:2px dashed rgba(255,255,255,0.55); border-radius:50%/60%; pointer-events:none; }
-  .markers{ inset:0; pointer-events:none; }
 
-  .marker{
-    position:absolute;
-    transform:translate(-50%,-50%) scale(0.6);
-    opacity:0;
-    text-align:center;
-    transition:opacity .4s ease, transform .4s cubic-bezier(.34,1.56,.64,1);
+  #placeholderGlyph{ display:flex; align-items:center; justify-content:center; color:rgba(255,255,255,0.4); }
+
+  .brackets{ pointer-events:none; }
+  .brackets span{
+    position:absolute; width:26px; height:26px; border:2.5px solid rgba(255,255,255,0.72);
   }
-  .marker.active{ opacity:1; transform:translate(-50%,-50%) scale(1); }
-  .marker-dot{
-    display:block; width:10px; height:10px; margin:0 auto 5px;
-    border-radius:50%; background:var(--marker);
-    box-shadow:0 0 0 4px rgba(226,74,46,0.28);
+  .brackets .tl{ top:14%; left:14%; border-right:none; border-bottom:none; border-top-left-radius:8px; }
+  .brackets .tr{ top:14%; right:14%; border-left:none; border-bottom:none; border-top-right-radius:8px; }
+  .brackets .bl{ bottom:14%; left:14%; border-right:none; border-top:none; border-bottom-left-radius:8px; }
+  .brackets .br{ bottom:14%; right:14%; border-left:none; border-top:none; border-bottom-right-radius:8px; }
+
+  .pins{ pointer-events:none; }
+  .pin{
+    position:absolute; transform:translate(-50%,-40%) translateY(6px); opacity:0;
+    display:flex; flex-direction:column; align-items:center; gap:4px;
+    transition:opacity .35s ease, transform .35s ease;
   }
-  .marker.active .marker-dot{ animation:pulse 1.6s ease-in-out infinite; }
-  @keyframes pulse{
-    0%,100%{ box-shadow:0 0 0 4px rgba(226,74,46,0.28); }
-    50%{ box-shadow:0 0 0 9px rgba(226,74,46,0.12); }
+  .pin.on{ opacity:1; transform:translate(-50%,-40%) translateY(0); }
+  .pin-badge{
+    width:20px; height:20px; border-radius:50%; background:var(--amber);
+    color:#1E1B17; font-family:var(--mono); font-size:0.62rem; font-weight:700;
+    display:flex; align-items:center; justify-content:center;
+    box-shadow:0 0 0 4px rgba(217,142,59,0.28);
   }
-  .marker-label{
-    display:inline-block;
-    font-family:'IBM Plex Mono', monospace;
-    font-size:0.6rem; letter-spacing:0.06em;
-    background:rgba(18,51,46,0.88); color:#fff;
-    padding:2px 6px; border-radius:4px; white-space:nowrap;
+  .pin-tag{
+    font-family:var(--mono); font-size:0.58rem; letter-spacing:0.05em;
+    background:rgba(30,27,23,0.86); color:#fff; padding:2px 6px; border-radius:4px; white-space:nowrap;
   }
 
-  .status{ min-height:1.3em; font-family:'IBM Plex Mono', monospace; font-size:0.76rem; color:var(--teal); text-align:center; margin:0 0 14px; }
+  .status{ min-height:1.3em; font-family:var(--mono); font-size:0.75rem; color:var(--clay-deep); text-align:center; margin:0 0 14px; }
 
-  .controls{ display:flex; gap:10px; }
+  .row{ display:flex; gap:10px; }
   .btn{
-    flex:1; border:none; border-radius:12px; padding:13px 16px;
-    font-family:'IBM Plex Sans', sans-serif; font-weight:600; font-size:0.92rem;
+    flex:1; border:none; border-radius:999px; padding:13px 16px;
+    font-family:var(--sans); font-weight:600; font-size:0.92rem;
     cursor:pointer; transition:transform .15s ease, background .15s ease;
   }
   .btn:active{ transform:scale(0.97); }
-  .btn-primary{ background:var(--teal); color:#fff; }
-  .btn-primary:hover{ background:var(--teal-deep); }
-  .btn-ghost{ background:transparent; color:var(--teal); border:1.5px solid var(--line); }
-  .btn:focus-visible{ outline:2px solid var(--marker); outline-offset:2px; }
+  .btn-fill{ background:var(--clay); color:#fff; }
+  .btn-fill:hover{ background:var(--clay-deep); }
+  .btn-outline{ background:transparent; color:var(--clay-deep); border:1.5px solid var(--line); }
+  .btn:focus-visible{ outline:2px solid var(--amber); outline-offset:2px; }
+
+  input[type=file]{ display:none; }
 
   /* Results */
-  .type-eyebrow, .section-eyebrow{
-    font-family:'IBM Plex Mono', monospace; font-size:0.66rem; letter-spacing:0.1em;
-    color:var(--ink-soft); text-transform:uppercase; margin:22px 0 8px;
-  }
-  .type-eyebrow{ margin-top:0; }
-  .type-badge{ background:var(--blush-soft); border-radius:14px; padding:20px; text-align:center; }
-  .type-name{ font-family:'Space Grotesk', sans-serif; font-weight:700; font-size:2rem; color:var(--teal-deep); }
-  .type-note{ color:var(--ink-soft); font-size:0.9rem; text-align:center; margin:8px 0 0; line-height:1.5; }
+  .eyebrow{ font-family:var(--mono); font-size:0.65rem; letter-spacing:0.1em; color:var(--ink-mute); text-transform:uppercase; margin:22px 0 8px; }
+  .eyebrow:first-child{ margin-top:0; }
 
-  .region-grid{ display:grid; grid-template-columns:1fr 1fr; gap:10px; }
-  .region-item{ background:var(--paper); border:1px solid var(--line); border-radius:10px; padding:10px 12px; }
-  .region-label{ font-family:'IBM Plex Mono', monospace; font-size:0.63rem; letter-spacing:0.08em; color:var(--teal); margin-bottom:4px; }
-  .region-text{ font-size:0.85rem; line-height:1.4; }
+  .hero{ display:flex; align-items:center; gap:14px; background:var(--sage-soft); border-radius:16px; padding:16px 18px; }
+  .hero-glyph{ width:46px; height:46px; border-radius:12px; background:var(--sage); color:#fff; display:flex; align-items:center; justify-content:center; font-weight:700; font-size:1.3rem; flex:none; }
+  .hero-name{ font-weight:700; font-size:1.4rem; color:var(--sage); line-height:1.1; }
+  .hero-note{ font-size:0.85rem; color:var(--ink-mute); line-height:1.45; margin:4px 0 0; }
 
-  .obs-list{ margin:0; padding-left:1.15em; font-size:0.9rem; line-height:1.65; }
-  .obs-list li{ margin-bottom:4px; }
+  .region-rows{ display:flex; flex-direction:column; gap:8px; }
+  .region-row{ display:flex; gap:10px; align-items:flex-start; background:var(--bg); border-radius:10px; padding:10px 12px; }
+  .region-bar{ width:4px; align-self:stretch; border-radius:3px; background:var(--amber); flex:none; }
+  .region-copy .region-name{ font-family:var(--mono); font-size:0.62rem; letter-spacing:0.07em; color:var(--clay-deep); margin-bottom:2px; }
+  .region-copy .region-detail{ font-size:0.85rem; line-height:1.4; }
 
-  .routine-grid{ display:grid; grid-template-columns:1fr 1fr; gap:16px; }
-  .routine-label{ font-family:'IBM Plex Mono', monospace; font-size:0.7rem; letter-spacing:0.1em; color:var(--marker); margin-bottom:6px; }
-  .routine-col ol{ margin:0; padding-left:1.1em; font-size:0.84rem; line-height:1.6; }
+  .note-list{ margin:0; padding-left:1.2em; font-size:0.9rem; line-height:1.65; }
+  .note-list li{ margin-bottom:4px; }
 
-  .chip-list{ list-style:none; display:flex; flex-wrap:wrap; gap:8px; padding:0; margin:0; }
-  .chip{ background:var(--blush-soft); color:var(--teal-deep); font-size:0.78rem; padding:6px 11px; border-radius:999px; line-height:1.3; }
-  .chip-list-muted .chip{ background:var(--paper); border:1px solid var(--line); color:var(--ink-soft); }
+  .timeline{ display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+  .timeline-head{ font-family:var(--mono); font-size:0.68rem; letter-spacing:0.1em; color:var(--clay); margin-bottom:8px; }
+  .timeline-steps{ list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:8px; }
+  .timeline-steps li{ position:relative; padding-left:16px; font-size:0.83rem; line-height:1.4; }
+  .timeline-steps li::before{ content:''; position:absolute; left:0; top:6px; width:7px; height:7px; border-radius:50%; background:var(--sage); }
 
-  .note{ font-size:0.8rem; color:var(--ink-soft); margin:20px 0 18px; line-height:1.55; }
+  .tag-list{ list-style:none; display:flex; flex-wrap:wrap; gap:8px; padding:0; margin:0; }
+  .tag{ background:var(--sage-soft); color:var(--sage); font-size:0.78rem; padding:6px 12px 6px 10px; border-radius:8px; line-height:1.3; border-left:3px solid var(--sage); }
+  .tag-list.muted .tag{ background:var(--bg); border-left-color:var(--ink-mute); color:var(--ink-mute); }
 
-  #errorPanel{ text-align:center; }
-  #errorPanel p{ font-size:0.92rem; color:var(--ink-soft); line-height:1.55; margin:0 0 16px; }
+  .fineprint{ font-size:0.79rem; color:var(--ink-mute); margin:20px 0 18px; line-height:1.5; }
 
-  .disclaimer{ font-size:0.72rem; color:var(--ink-soft); text-align:center; margin-top:20px; line-height:1.5; }
+  #errorCard{ text-align:center; }
+  #errorCard p{ font-size:0.92rem; color:var(--ink-mute); line-height:1.55; margin:0 0 16px; }
 
-  @media (prefers-reduced-motion: reduce){
-    .marker, .btn{ transition:none !important; }
-    .marker.active .marker-dot{ animation:none !important; }
+  .disclaimer{ font-size:0.72rem; color:var(--ink-mute); text-align:center; margin-top:20px; line-height:1.5; }
+
+  @media (prefers-reduced-motion:reduce){
+    .pin, .btn{ transition:none !important; }
   }
 </style>
 </head>
 <body>
-<div class="app">
+<div class="shell">
 
-  <div class="topbar">
-    <span class="wordmark">Skinprint</span>
-    <span class="tagline">On-device skin read</span>
-  </div>
+  <header class="masthead">
+    <div class="mark">S</div>
+    <div class="masthead-text">
+      <span class="wordmark">Skinprint</span>
+      <span class="tagline">On-device skin read</span>
+    </div>
+  </header>
 
-  <section class="panel" id="capturePanel">
-    <p class="consent">Your photo never leaves your device — face detection and this whole read run right in your browser.</p>
-    <details class="privacy-details">
+  <section class="card" id="captureCard">
+    <p class="consent">Your photo is read in this browser tab and never leaves your device — nothing is uploaded, stored, or sent to a server.</p>
+    <details class="howitworks">
       <summary>How this works</summary>
-      <p>No AI service, no upload, no account. Face detection runs on-device (MediaPipe, loaded once from a CDN), then this app reads shine, color and texture patterns directly from the photo's pixels to estimate your skin type. It's a lighter-weight read than an AI vision model would give — closer to a quick visual impression than genuine reasoning — but nothing about your photo ever leaves this page, and it costs nothing to run at any scale.</p>
+      <p>Face detection runs on-device using a model loaded once from a CDN (MediaPipe). From there, this app measures shine, color and surface texture directly from the photo's pixels and compares each face region against your own facial average — it's pixel math, not an AI model reasoning about your skin. Think quick visual impression, not lab-grade measurement. Nothing about the photo is kept once the read finishes.</p>
     </details>
 
-    <div class="photo-frame" id="photoFrame">
+    <div class="viewfinder" id="viewfinder">
       <video id="video" autoplay playsinline muted hidden></video>
-      <img id="preview" hidden alt="Your photo">
-      <div class="face-guide" id="faceGuide" hidden></div>
-      <div class="markers" id="markers" hidden></div>
-      <div id="frameIcon">
-        <svg width="60" height="60" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-          <rect x="3" y="7" width="18" height="13" rx="2"/>
-          <path d="M8 7l1.5-2.5h5L16 7"/>
-          <circle cx="12" cy="13.5" r="3.5"/>
+      <img id="stillFrame" hidden alt="Your photo">
+      <div id="placeholderGlyph">
+        <svg width="52" height="52" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+          <circle cx="12" cy="8" r="3.4"/>
+          <path d="M5 20c0-3.9 3.13-7 7-7s7 3.1 7 7"/>
         </svg>
       </div>
+      <div class="brackets" id="brackets" hidden>
+        <span class="tl"></span><span class="tr"></span><span class="bl"></span><span class="br"></span>
+      </div>
+      <div class="pins" id="pins" hidden></div>
     </div>
 
     <p class="status" id="statusLine" aria-live="polite"></p>
 
-    <div class="controls" id="controlsIdle">
-      <button class="btn btn-primary" id="cameraBtn">Use camera</button>
-      <button class="btn btn-ghost" id="uploadBtn">Upload a photo</button>
+    <div class="row" id="controlsIdle">
+      <button class="btn btn-fill" id="cameraBtn">Use camera</button>
+      <button class="btn btn-outline" id="uploadBtn">Upload a photo</button>
     </div>
-    <div class="controls" id="controlsCamera" hidden>
-      <button class="btn btn-primary" id="captureBtn">Capture</button>
-      <button class="btn btn-ghost" id="cancelBtn">Cancel</button>
+    <div class="row" id="controlsCamera" hidden>
+      <button class="btn btn-fill" id="captureBtn">Capture</button>
+      <button class="btn btn-outline" id="cancelBtn">Cancel</button>
     </div>
-    <div class="controls" id="controlsPreview" hidden>
-      <button class="btn btn-primary" id="analyzeBtn">Analyze my skin</button>
-      <button class="btn btn-ghost" id="retakeBtn">Retake</button>
+    <div class="row" id="controlsPreview" hidden>
+      <button class="btn btn-fill" id="analyzeBtn">Read my skin</button>
+      <button class="btn btn-outline" id="retakeBtn">Retake</button>
     </div>
 
-    <input type="file" id="fileInput" accept="image/*" capture="user" hidden>
+    <input type="file" id="fileInput" accept="image/*" capture="user">
   </section>
 
-  <section class="panel" id="resultsPanel" hidden></section>
+  <section class="card" id="resultsCard" hidden></section>
 
-  <section class="panel" id="errorPanel" hidden>
+  <section class="card" id="errorCard" hidden>
     <p id="errorText"></p>
-    <div class="controls"><button class="btn btn-primary" id="retryBtn">Try again</button></div>
+    <div class="row"><button class="btn btn-fill" id="retryBtn">Try again</button></div>
   </section>
 
   <p class="disclaimer">Cosmetic guidance only, not a medical diagnosis. See a dermatologist about anything persistent or concerning.</p>
 
 </div>
 
-<script>
-document.addEventListener('DOMContentLoaded', () => {
-  const video = document.getElementById('video');
-  const preview = document.getElementById('preview');
-  const frameIcon = document.getElementById('frameIcon');
-  const faceGuide = document.getElementById('faceGuide');
-  const markersEl = document.getElementById('markers');
-  const statusLine = document.getElementById('statusLine');
-  const controlsIdle = document.getElementById('controlsIdle');
-  const controlsCamera = document.getElementById('controlsCamera');
-  const controlsPreview = document.getElementById('controlsPreview');
-  const cameraBtn = document.getElementById('cameraBtn');
-  const uploadBtn = document.getElementById('uploadBtn');
-  const fileInput = document.getElementById('fileInput');
-  const captureBtn = document.getElementById('captureBtn');
-  const cancelBtn = document.getElementById('cancelBtn');
-  const analyzeBtn = document.getElementById('analyzeBtn');
-  const retakeBtn = document.getElementById('retakeBtn');
-  const capturePanel = document.getElementById('capturePanel');
-  const resultsPanel = document.getElementById('resultsPanel');
-  const errorPanel = document.getElementById('errorPanel');
-  const errorText = document.getElementById('errorText');
-  const retryBtn = document.getElementById('retryBtn');
+<script type="module">
+/* ---------------------------------------------------------------------
+ * Skinprint — on-device skin read
+ * No network calls beyond the one-time MediaPipe model fetch; no photo
+ * is ever written to storage or sent anywhere.
+ * ------------------------------------------------------------------- */
 
-  let currentStream = null;
-  let currentImageDataUrl = null;
-  let statusInterval = null;
+const CFG = {
+  mpVersion: '0.10.14',
+  get mpModuleUrl(){ return `https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@${this.mpVersion}`; },
+  get mpWasmUrl(){ return `${this.mpModuleUrl}/wasm`; },
+  mpModelUrl: 'https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task',
+  detectorTimeoutMs: 2500,
+  highlightPercentile: 0.80,   // brightest 20% of the face's own pixels are candidate highlights
+  highlightSatMax: 60,         // out of 255 — specular highlights read as desaturated
+  shineZOnset: 0.6,            // region reads "shiny" once it's this many std-devs above the face's own mean
+  rednessZOnset: 1.0,
+  dryAbsShine: 0.05,           // whole-face highlight coverage below this, with...
+  dryTextureCV: 0.16,          // ...texture coefficient-of-variation above this, reads as Dry
+  resultRevealMs: 1700,
+  statusPhrases: ['Locating your face…', 'Sampling shine and tone…', 'Weighing each region…']
+};
 
-  /* ---------- On-device face landmark detection (MediaPipe), with graceful fallback ---------- */
+const REGION_BOXES = {
+  forehead: [0.20, 0.02, 0.80, 0.24],
+  tzone:    [0.40, 0.30, 0.60, 0.62],
+  cheekL:   [0.05, 0.40, 0.34, 0.68],
+  cheekR:   [0.66, 0.40, 0.95, 0.68],
+  chin:     [0.32, 0.80, 0.68, 0.98],
+  face:     [0.00, 0.00, 1.00, 1.00]
+};
 
-  const MP_VERSION = '0.10.14';
-  const MP_MODULE_URL = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@' + MP_VERSION;
-  const MP_WASM_URL = MP_MODULE_URL + '/wasm';
-  const MP_MODEL_URL = 'https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task';
+/* ---------- color / stats utilities ---------- */
 
-  let faceLandmarker = null;
+const clamp = (n, lo, hi) => Math.max(lo, Math.min(hi, n));
 
-  async function initFaceLandmarker(){
+function rgbToHsv(r, g, b){
+  const max = Math.max(r, g, b), min = Math.min(r, g, b);
+  const v = max;
+  const s = max === 0 ? 0 : ((max - min) / max) * 255;
+  return { s, v };
+}
+
+function mean(arr){ return arr.reduce((a, b) => a + b, 0) / arr.length; }
+function stdev(arr, avg = mean(arr)){
+  return Math.sqrt(mean(arr.map(x => (x - avg) ** 2)));
+}
+
+/* ---------- face detection (on-device, graceful fallback) ---------- */
+
+let landmarkerReady = null;
+let landmarker = null;
+
+function loadLandmarker(){
+  if (landmarkerReady) return landmarkerReady;
+  landmarkerReady = (async () => {
     try{
-      const mod = await import(MP_MODULE_URL);
-      const vision = await mod.FilesetResolver.forVisionTasks(MP_WASM_URL);
+      const tasks = await import(CFG.mpModuleUrl);
+      const files = await tasks.FilesetResolver.forVisionTasks(CFG.mpWasmUrl);
+      const options = {
+        baseOptions: { modelAssetPath: CFG.mpModelUrl, delegate: 'GPU' },
+        runningMode: 'IMAGE',
+        numFaces: 1
+      };
       try{
-        faceLandmarker = await mod.FaceLandmarker.createFromOptions(vision, {
-          baseOptions: { modelAssetPath: MP_MODEL_URL, delegate: 'GPU' },
-          runningMode: 'IMAGE',
-          numFaces: 1
-        });
+        landmarker = await tasks.FaceLandmarker.createFromOptions(files, options);
       }catch(gpuErr){
-        console.warn('GPU delegate unavailable, trying CPU', gpuErr);
-        faceLandmarker = await mod.FaceLandmarker.createFromOptions(vision, {
-          baseOptions: { modelAssetPath: MP_MODEL_URL, delegate: 'CPU' },
-          runningMode: 'IMAGE',
-          numFaces: 1
-        });
+        landmarker = await tasks.FaceLandmarker.createFromOptions(files, { ...options, baseOptions: { ...options.baseOptions, delegate: 'CPU' } });
       }
     }catch(err){
-      console.warn('Face landmarker unavailable this session; using approximate regions.', err);
-      faceLandmarker = null;
+      console.warn('On-device face model unavailable this session — using an approximate frame instead.', err);
+      landmarker = null;
     }
+  })();
+  return landmarkerReady;
+}
+
+function boxFromLandmarks(points, w, h){
+  let minX = 1, maxX = 0, minY = 1, maxY = 0;
+  for (const p of points){
+    if (p.x < minX) minX = p.x;
+    if (p.x > maxX) maxX = p.x;
+    if (p.y < minY) minY = p.y;
+    if (p.y > maxY) maxY = p.y;
   }
-  const landmarkerPromise = initFaceLandmarker();
+  return [minX * w, minY * h, maxX * w, maxY * h];
+}
 
-  /* ---------- Region geometry ---------- */
+function approximateFaceBox(w, h){
+  return [0.16 * w, 0.05 * h, 0.84 * w, 0.95 * h];
+}
 
-  function regionsFromFaceBox(faceLeft, faceTop, faceRight, faceBottom){
-    const fw = Math.max(1, faceRight - faceLeft);
-    const fh = Math.max(1, faceBottom - faceTop);
-    function box(x0,x1,y0,y1){
-      return { x: faceLeft + x0*fw, y: faceTop + y0*fh, w: (x1-x0)*fw, h: (y1-y0)*fh };
-    }
-    return {
-      forehead: box(0.22,0.78, 0.00,0.22),
-      tzone:    box(0.38,0.62, 0.32,0.62),
-      cheekL:   box(0.06,0.32, 0.42,0.70),
-      cheekR:   box(0.68,0.94, 0.42,0.70),
-      chin:     box(0.30,0.70, 0.80,0.99),
-      face:     box(0.00,1.00, 0.00,1.00)
+async function detectFaceBox(canvas){
+  await Promise.race([loadLandmarker(), new Promise(r => setTimeout(r, CFG.detectorTimeoutMs))]);
+  if (!landmarker) return { box: approximateFaceBox(canvas.width, canvas.height), approximate: true };
+
+  try{
+    const result = landmarker.detect(canvas);
+    if (!result?.faceLandmarks?.length) return { box: null, noFace: true };
+    return { box: boxFromLandmarks(result.faceLandmarks[0], canvas.width, canvas.height), approximate: false };
+  }catch(err){
+    console.warn('Detection failed at runtime — using an approximate frame instead.', err);
+    return { box: approximateFaceBox(canvas.width, canvas.height), approximate: true };
+  }
+}
+
+/* ---------- region geometry ---------- */
+
+function regionRectsFromFaceBox([left, top, right, bottom]){
+  const fw = Math.max(1, right - left), fh = Math.max(1, bottom - top);
+  const rects = {};
+  for (const [key, [x0, y0, x1, y1]] of Object.entries(REGION_BOXES)){
+    rects[key] = { x: left + x0 * fw, y: top + y0 * fh, w: (x1 - x0) * fw, h: (y1 - y0) * fh };
+  }
+  return rects;
+}
+
+/* ---------- pixel sampling ---------- */
+
+const SAMPLE_STRIDE = 4; // read every 4th pixel per row — plenty for a stable read, far cheaper than a full scan
+
+function sampleRect(ctx, rect){
+  const x = Math.max(0, Math.round(rect.x)), y = Math.max(0, Math.round(rect.y));
+  const w = Math.max(1, Math.round(rect.w)), h = Math.max(1, Math.round(rect.h));
+  let data;
+  try{ data = ctx.getImageData(x, y, w, h).data; }
+  catch{ return { v: [], s: [], redness: [] }; }
+
+  const v = [], s = [], redness = [];
+  for (let i = 0; i < data.length; i += SAMPLE_STRIDE * 4){
+    const r = data[i], g = data[i + 1], b = data[i + 2];
+    const hsv = rgbToHsv(r, g, b);
+    v.push(hsv.v);
+    s.push(hsv.s);
+    redness.push(r - g);
+  }
+  return { v, s, redness };
+}
+
+function highlightThreshold(vValues){
+  const bins = new Array(256).fill(0);
+  for (const val of vValues) bins[clamp(Math.round(val), 0, 255)]++;
+  const target = vValues.length * CFG.highlightPercentile;
+  let running = 0;
+  for (let level = 0; level < 256; level++){
+    running += bins[level];
+    if (running >= target) return level;
+  }
+  return 255;
+}
+
+function shineFractionOf(sample, threshold){
+  if (!sample.v.length) return 0;
+  let hits = 0;
+  for (let i = 0; i < sample.v.length; i++){
+    if (sample.v[i] >= threshold && sample.s[i] <= CFG.highlightSatMax) hits++;
+  }
+  return hits / sample.v.length;
+}
+
+function textureCoefficientOfVariation(sample){
+  if (!sample.v.length) return 0;
+  const avg = mean(sample.v);
+  if (avg < 1e-6) return 0;
+  return stdev(sample.v, avg) / avg;
+}
+
+function readSkinMetrics(canvas, rects){
+  const ctx = canvas.getContext('2d');
+  const faceSample = sampleRect(ctx, rects.face);
+  const threshold = highlightThreshold(faceSample.v);
+
+  const regionKeys = ['forehead', 'tzone', 'cheekL', 'cheekR', 'chin'];
+  const perRegion = {};
+  for (const key of regionKeys){
+    const sample = sampleRect(ctx, rects[key]);
+    perRegion[key] = {
+      shine: shineFractionOf(sample, threshold),
+      redness: sample.redness.length ? mean(sample.redness) : 0
     };
   }
 
-  function landmarksToFaceBox(landmarks, w, h){
-    let minX=1, maxX=0, minY=1, maxY=0;
-    for (const p of landmarks){
-      if (p.x < minX) minX = p.x;
-      if (p.x > maxX) maxX = p.x;
-      if (p.y < minY) minY = p.y;
-      if (p.y > maxY) maxY = p.y;
-    }
-    return [minX*w, minY*h, maxX*w, maxY*h];
+  return {
+    perRegion,
+    faceShine: shineFractionOf(faceSample, threshold),
+    faceRedness: faceSample.redness.length ? mean(faceSample.redness) : 0,
+    faceTextureCV: textureCoefficientOfVariation(faceSample)
+  };
+}
+
+/* ---------- classification (pure function — testable without a canvas) ---------- */
+
+// Each region compared against the whole-face baseline (a separate, broader pixel
+// sample — not just these 5 numbers), scaled by how much the regions vary from each
+// other. Comparing to the regions' own mean instead would force any two disjoint
+// groups of them to score in opposite directions, which makes "shiny everywhere"
+// mathematically unreachable — deltaZ avoids that by centering on an independent value.
+function deltaZ(values, center){
+  const spread = Math.max(stdev(values), 1e-6);
+  return values.map(v => (v - center) / spread);
+}
+
+function classify({ shine, redness, faceShine, faceRedness, faceTextureCV }){
+  // shine/redness order: [forehead, tzone, cheekL, cheekR, chin]
+  const shineZ = deltaZ(shine, faceShine);
+  const redZ = deltaZ(redness, faceRedness);
+
+  const tZoneShineZ = mean([shineZ[0], shineZ[1], shineZ[4]]);
+  const cheekShineZ = mean([shineZ[2], shineZ[3]]);
+  const cheekNoseRedZ = mean([redZ[2], redZ[3], redZ[1]]);
+
+  let skinType;
+  if (cheekNoseRedZ > CFG.rednessZOnset){
+    skinType = 'Sensitive';
+  } else if (tZoneShineZ > CFG.shineZOnset && cheekShineZ > CFG.shineZOnset){
+    skinType = 'Oily';
+  } else if (tZoneShineZ > CFG.shineZOnset && cheekShineZ <= CFG.shineZOnset){
+    skinType = 'Combination';
+  } else if (faceShine < CFG.dryAbsShine && faceTextureCV > CFG.dryTextureCV){
+    skinType = 'Dry';
+  } else {
+    skinType = 'Normal';
   }
 
-  function fallbackFaceBox(w, h){
-    return [0.15*w, 0.06*h, 0.85*w, 0.94*h];
+  return { skinType, tZoneShineZ, cheekShineZ, cheekNoseRedZ, faceShine, faceTextureCV, shineZ };
+}
+
+function regionShineWord(z){
+  if (z > CFG.shineZOnset) return 'shiny';
+  if (z < -CFG.shineZOnset) return 'matte';
+  return 'even';
+}
+
+/* ---------- content templates (local only, no network) ---------- */
+
+const REGION_COPY = {
+  forehead: { shiny: 'Reads shinier than the rest of your face — oil tends to surface here first.', matte: 'Drier and more matte than the rest of your face.', even: 'In step with the rest of your face, neither shiny nor matte.' },
+  tzone:    { shiny: 'Clearly shinier than your cheeks — the classic T-zone pattern.', matte: 'Stays matte, sometimes drier than your forehead.', even: 'Fairly neutral, not standing out from your cheeks.' },
+  cheeks:   { shiny: "Carrying more shine than cheeks usually do — oil isn't staying confined to the T-zone.", matte: 'The driest-reading area of your face.', even: 'Comfortable and balanced-looking.' },
+  chin:     { shiny: 'Picks up visible shine, often tracking with the nose.', matte: 'Reads matte, occasionally a little tight-looking.', even: 'Fairly unremarkable — neither shiny nor dry.' }
+};
+
+const TYPE_SUMMARY = {
+  Normal: 'Shine and dryness both sit in a narrow band across your face today — nothing dominates.',
+  Oily: 'Shine turns up broadly across your face, not confined to the T-zone.',
+  Dry: 'Little shine anywhere paired with more visible surface texture — often a hydration signal.',
+  Combination: 'Your T-zone reads distinctly shinier than your cheeks — the two areas splitting apart.',
+  Sensitive: "Cheeks and nose carry more red than the rest of the photo would predict — worth going gentle."
+};
+
+const ROUTINE = {
+  Normal: { am: ['Gentle cleanser', 'Lightweight moisturizer', 'Broad-spectrum SPF 30+'], pm: ['Gentle cleanser', 'Hydrating serum, optional', 'Moisturizer'] },
+  Oily: { am: ['Gel or foaming cleanser', 'Oil-free moisturizer', 'Mattifying SPF 30+'], pm: ['Double-cleanse if wearing sunscreen or makeup', 'Salicylic acid (BHA) treatment', 'Lightweight gel moisturizer'] },
+  Dry: { am: ['Cream or oil cleanser', 'Hydrating serum', 'Rich moisturizer', 'SPF 30+'], pm: ['Gentle cleanser', 'Hyaluronic acid serum', 'Barrier-repair moisturizer or facial oil'] },
+  Combination: { am: ['Gentle gel cleanser', 'Lightweight moisturizer, richer only on dry patches', 'SPF 30+'], pm: ['Gentle cleanser', 'Light BHA on the T-zone if needed', 'Richer moisturizer on the cheeks'] },
+  Sensitive: { am: ['Fragrance-free gentle cleanser', 'Soothing moisturizer', 'Mineral SPF 30+ (zinc oxide or titanium dioxide)'], pm: ['Fragrance-free gentle cleanser', 'Barrier-repair moisturizer', 'Skip active ingredients most nights'] }
+};
+
+const INGREDIENTS_NOW = {
+  Normal: ['Hyaluronic acid — hydration without added weight', 'Vitamin C — brightens gradually', 'Niacinamide — evens tone, supports the barrier'],
+  Oily: ['Niacinamide — helps balance oil over time', 'Salicylic acid (BHA) — clears pores, controls shine', 'A weekly clay mask to absorb excess oil'],
+  Dry: ['Ceramides — rebuild the skin barrier', 'Hyaluronic acid — draws moisture in', 'Squalane — softens without feeling heavy'],
+  Combination: ['Niacinamide — balances oily and dry areas at once', 'Hyaluronic acid — hydrates cheeks without adding T-zone shine'],
+  Sensitive: ['Centella asiatica (cica) — calms visible redness', 'Oat extract — soothes and softens', 'Ceramides — supports a compromised barrier']
+};
+
+const INGREDIENTS_LATER = {
+  Normal: ['Low-strength retinol, 2x/week to start — smooths texture over time', 'AHA/BHA exfoliant, 1-2x/week — gentle renewal'],
+  Oily: ['Retinol, starting 1-2x/week — helps oil and texture', 'Glycolic acid (AHA), alternated with BHA nights'],
+  Dry: ['Gentle lactic acid, 1x/week — smooths without stripping moisture', 'Low-strength retinol, 1x/week — always follow with rich moisturizer'],
+  Combination: ['Salicylic acid, T-zone only, 2-3x/week', 'Retinol, 1-2x/week — avoid drier areas at first'],
+  Sensitive: ['Azelaic acid, low strength, 2x/week — gentler brightening', 'Bakuchiol, a fragrance-free retinol alternative, 1x/week']
+};
+
+function buildObservations(cls){
+  const notes = [];
+  if (cls.tZoneShineZ > CFG.shineZOnset && cls.cheekShineZ <= CFG.shineZOnset){
+    notes.push('Oil concentrates in your T-zone while your cheeks stay comparatively drier or balanced.');
   }
-
-  async function getFaceBox(canvas){
-    try{
-      await Promise.race([landmarkerPromise, new Promise(r => setTimeout(r, 2500))]);
-    }catch(e){ /* fall through to whatever faceLandmarker currently is */ }
-
-    if (!faceLandmarker) return null;
-    try{
-      const result = faceLandmarker.detect(canvas);
-      if (!result || !result.faceLandmarks || result.faceLandmarks.length === 0){
-        return 'no_face';
-      }
-      return landmarksToFaceBox(result.faceLandmarks[0], canvas.width, canvas.height);
-    }catch(err){
-      console.warn('Detection failed at runtime, using approximate regions.', err);
-      return null;
-    }
+  if (cls.faceShine > 0.14){
+    notes.push('Shine reads fairly even across your whole face in this photo.');
   }
-
-  /* ---------- Pixel-level heuristics ---------- */
-
-  const SHINE_LUM_THRESHOLD = 200;
-  const OIL_DELTA = 0.04;
-  const DRY_SHINE_ABS = 0.03;
-  const DRY_TEXTURE_ABS = 20;
-  const REDNESS_DELTA_THRESHOLD = 5;
-
-  function analyzeRegion(ctx, box){
-    const x = Math.max(0, Math.round(box.x));
-    const y = Math.max(0, Math.round(box.y));
-    const w = Math.max(1, Math.round(box.w));
-    const h = Math.max(1, Math.round(box.h));
-    let data;
-    try{
-      data = ctx.getImageData(x, y, w, h).data;
-    }catch(err){
-      return { avgLum: 128, shineFraction: 0, redness: 0, texture: 0 };
-    }
-
-    const stridePixels = 4;
-    let sumLum = 0, count = 0, shineCount = 0, sumRedness = 0;
-    const lums = [];
-
-    for (let i = 0; i < data.length; i += stridePixels * 4){
-      const r = data[i], g = data[i+1], b = data[i+2];
-      const lum = 0.299*r + 0.587*g + 0.114*b;
-      sumLum += lum;
-      lums.push(lum);
-      if (lum > SHINE_LUM_THRESHOLD) shineCount++;
-      sumRedness += (r - g);
-      count++;
-    }
-    if (count === 0) return { avgLum: 128, shineFraction: 0, redness: 0, texture: 0 };
-
-    const avgLum = sumLum / count;
-    const shineFraction = shineCount / count;
-    const redness = sumRedness / count;
-
-    let sumSq = 0;
-    for (const l of lums) sumSq += (l - avgLum) * (l - avgLum);
-    const texture = Math.sqrt(sumSq / count);
-
-    return { avgLum, shineFraction, redness, texture };
+  if (cls.faceShine < CFG.dryAbsShine && cls.faceTextureCV > CFG.dryTextureCV){
+    notes.push('Overall the photo reads matte, with more visible texture than shine.');
   }
-
-  function computeAllMetrics(canvas, boxes){
-    const ctx = canvas.getContext('2d');
-    const metrics = {};
-    for (const key of ['forehead','tzone','cheekL','cheekR','chin','face']){
-      metrics[key] = analyzeRegion(ctx, boxes[key]);
-    }
-    return metrics;
+  if (cls.cheekNoseRedZ > CFG.rednessZOnset){
+    notes.push('A bit more redness than average, mostly around the cheeks and nose.');
   }
-
-  function shineLabel(delta){
-    if (delta > OIL_DELTA) return 'high';
-    if (delta < -OIL_DELTA) return 'low';
-    return 'medium';
+  if (Math.abs(cls.tZoneShineZ) < 0.3 && Math.abs(cls.cheekShineZ) < 0.3){
+    notes.push('Shine reads evenly across regions today — nothing stands out on its own.');
   }
+  const fillers = [
+    'Lighting and camera quality move a read like this more than a lab measurement would — treat it as a starting point.',
+    'Skin looks different morning to evening, so a second read on another day may land a little differently.',
+    "This only covers what's visible in the photo — hydration and oil beneath the surface aren't something a picture can show."
+  ];
+  let i = 0;
+  while (notes.length < 3 && i < fillers.length) notes.push(fillers[i++]);
+  return notes.slice(0, 5);
+}
 
-  function classifySkin(metrics){
-    const faceShine = metrics.face.shineFraction;
-    const faceRedness = metrics.face.redness;
-    const faceTexture = metrics.face.texture;
+function buildReading(canvas, rects){
+  const metrics = readSkinMetrics(canvas, rects);
+  const shine = ['forehead', 'tzone', 'cheekL', 'cheekR', 'chin'].map(k => metrics.perRegion[k].shine);
+  const redness = ['forehead', 'tzone', 'cheekL', 'cheekR', 'chin'].map(k => metrics.perRegion[k].redness);
+  const cls = classify({ shine, redness, faceShine: metrics.faceShine, faceRedness: metrics.faceRedness, faceTextureCV: metrics.faceTextureCV });
 
-    const tZoneShineDelta = ((metrics.forehead.shineFraction + metrics.tzone.shineFraction + metrics.chin.shineFraction) / 3) - faceShine;
-    const cheekShineDelta = ((metrics.cheekL.shineFraction + metrics.cheekR.shineFraction) / 2) - faceShine;
-    const rednessDelta = ((metrics.cheekL.redness + metrics.cheekR.redness + metrics.tzone.redness) / 3) - faceRedness;
-
-    let skinType;
-    if (rednessDelta > REDNESS_DELTA_THRESHOLD){
-      skinType = 'Sensitive';
-    } else if (tZoneShineDelta > OIL_DELTA && cheekShineDelta > OIL_DELTA){
-      skinType = 'Oily';
-    } else if (tZoneShineDelta > OIL_DELTA && cheekShineDelta <= OIL_DELTA){
-      skinType = 'Combination';
-    } else if (faceShine < DRY_SHINE_ABS && faceTexture > DRY_TEXTURE_ABS){
-      skinType = 'Dry';
-    } else {
-      skinType = 'Normal';
-    }
-
-    return { skinType, tZoneShineDelta, cheekShineDelta, rednessDelta, faceShine, faceTexture };
-  }
-
-  /* ---------- Content templates (all local, no network) ---------- */
-
-  const REGION_PHRASES = {
-    forehead: {
-      high: 'Shinier than the rest of your face — oil tends to build up here first.',
-      medium: 'About as oily as everywhere else on your face.',
-      low: 'Drier and more matte than the rest of your face.'
+  const shineZ = cls.shineZ;
+  return {
+    skinType: cls.skinType,
+    typeSummary: TYPE_SUMMARY[cls.skinType],
+    regions: {
+      forehead: REGION_COPY.forehead[regionShineWord(shineZ[0])],
+      t_zone: REGION_COPY.tzone[regionShineWord(shineZ[1])],
+      cheeks: REGION_COPY.cheeks[regionShineWord(cls.cheekShineZ)],
+      chin: REGION_COPY.chin[regionShineWord(shineZ[4])]
     },
-    tzone: {
-      high: 'Classic oily T-zone — noticeably shinier than your cheeks.',
-      medium: 'Fairly balanced, not especially oily.',
-      low: 'Stays matte, even a bit drier than your forehead.'
-    },
-    cheeks: {
-      high: "Shinier than expected for cheeks — oil isn't just staying in the T-zone.",
-      medium: 'Comfortable, balanced-looking.',
-      low: 'The driest-reading part of your face.'
-    },
-    chin: {
-      high: 'Picks up noticeable shine, often in step with the nose.',
-      medium: 'Fairly neutral.',
-      low: 'Reads matte, sometimes a little tight-looking.'
-    }
+    observations: buildObservations(cls),
+    routine: ROUTINE[cls.skinType],
+    ingredientsNow: INGREDIENTS_NOW[cls.skinType],
+    ingredientsLater: INGREDIENTS_LATER[cls.skinType],
+    footnote: 'This read comes from color and shine patterns in the photo, not a lab measurement. See a dermatologist about anything persistent or concerning.'
   };
+}
 
-  const TYPE_NOTES = {
-    Normal: 'Your T-zone and cheeks read fairly balanced today — not especially oily or dry anywhere.',
-    Oily: 'Shine shows up broadly across your face, not just in the T-zone.',
-    Dry: 'Your skin reads matte with a bit more visible texture — often a sign it wants more hydration.',
-    Combination: 'Your T-zone runs shinier than your cheeks — the classic combination pattern.',
-    Sensitive: "There's more visible redness than the rest of the reading would suggest, worth going gentle around."
-  };
+/* ---------- UI: elements ---------- */
 
-  const ROUTINES = {
-    Normal: { am: ['Gentle cleanser', 'Lightweight moisturizer', 'Broad-spectrum SPF 30+'], pm: ['Gentle cleanser', 'Hydrating serum (optional)', 'Moisturizer'] },
-    Oily: { am: ['Gel or foaming cleanser', 'Oil-free moisturizer', 'Mattifying SPF 30+'], pm: ['Cleanser (double-cleanse if wearing sunscreen or makeup)', 'Salicylic acid (BHA) treatment', 'Lightweight gel moisturizer'] },
-    Dry: { am: ['Cream or oil cleanser', 'Hydrating serum', 'Rich moisturizer', 'SPF 30+'], pm: ['Gentle cleanser', 'Hyaluronic acid serum', 'Barrier-repair moisturizer or facial oil'] },
-    Combination: { am: ['Gentle gel cleanser', 'Lightweight moisturizer (richer cream on dry patches only)', 'SPF 30+'], pm: ['Gentle cleanser', 'Light BHA on the T-zone if needed', 'Richer moisturizer on cheeks'] },
-    Sensitive: { am: ['Fragrance-free gentle cleanser', 'Soothing moisturizer', 'Mineral SPF 30+ (zinc oxide or titanium dioxide)'], pm: ['Fragrance-free gentle cleanser', 'Barrier-repair moisturizer', 'Skip actives most nights'] }
-  };
+const els = {
+  video: document.getElementById('video'),
+  still: document.getElementById('stillFrame'),
+  placeholder: document.getElementById('placeholderGlyph'),
+  brackets: document.getElementById('brackets'),
+  pins: document.getElementById('pins'),
+  status: document.getElementById('statusLine'),
+  idle: document.getElementById('controlsIdle'),
+  camera: document.getElementById('controlsCamera'),
+  preview: document.getElementById('controlsPreview'),
+  cameraBtn: document.getElementById('cameraBtn'),
+  uploadBtn: document.getElementById('uploadBtn'),
+  fileInput: document.getElementById('fileInput'),
+  captureBtn: document.getElementById('captureBtn'),
+  cancelBtn: document.getElementById('cancelBtn'),
+  analyzeBtn: document.getElementById('analyzeBtn'),
+  retakeBtn: document.getElementById('retakeBtn'),
+  captureCard: document.getElementById('captureCard'),
+  resultsCard: document.getElementById('resultsCard'),
+  errorCard: document.getElementById('errorCard'),
+  errorText: document.getElementById('errorText'),
+  retryBtn: document.getElementById('retryBtn')
+};
 
-  const INGREDIENTS_LOOK_FOR = {
-    Normal: ['Hyaluronic acid — hydration without weight', 'Vitamin C — brightens over time', 'Niacinamide — evens tone, supports the barrier'],
-    Oily: ['Niacinamide — helps balance oil over time', 'Salicylic acid (BHA) — clears pores, controls shine', 'Clay or charcoal mask, weekly — absorbs excess oil'],
-    Dry: ['Ceramides — rebuild the skin barrier', 'Hyaluronic acid — draws in moisture', 'Squalane — softens without feeling heavy'],
-    Combination: ['Niacinamide — balances oily and dry areas at once', 'Hyaluronic acid — hydrates cheeks without adding shine to the T-zone'],
-    Sensitive: ['Centella asiatica (cica) — calms visible redness', 'Oat extract — soothes and softens', 'Ceramides — supports a compromised barrier']
-  };
+let stream = null;
+let statusTimer = null;
+let workingPhotoUrl = null;
 
-  const INGREDIENTS_EASE_IN = {
-    Normal: ['Retinol, low strength, 2x/week to start — smooths texture over time', 'AHA/BHA exfoliant, 1-2x/week — gentle renewal'],
-    Oily: ['Retinol — helps oil and texture, start 1-2x/week', 'Glycolic acid (AHA) — brightens, alternate with BHA nights'],
-    Dry: ['Gentle lactic acid, 1x/week — smooths without stripping moisture', 'Low-strength retinol, 1x/week — always follow with rich moisturizer'],
-    Combination: ['Salicylic acid, T-zone only, 2-3x/week', 'Retinol, 1-2x/week — avoid drier areas at first'],
-    Sensitive: ['Azelaic acid, low strength, 2x/week — gentler brightening', 'Bakuchiol (a fragrance-free retinol alternative), 1x/week — introduce slowly']
-  };
+function show(el){ el.hidden = false; }
+function hide(el){ el.hidden = true; }
+function setStatus(text){ els.status.textContent = text || ''; }
 
-  function buildObservations(cls){
-    const obs = [];
-    if (cls.tZoneShineDelta > OIL_DELTA && cls.cheekShineDelta <= OIL_DELTA){
-      obs.push('Oil shows up mainly in your T-zone, while your cheeks stay comparatively drier or more balanced.');
-    }
-    if (cls.faceShine > 0.10){
-      obs.push('Shine shows up fairly evenly across your whole face in this photo.');
-    }
-    if (cls.faceShine < DRY_SHINE_ABS && cls.faceTexture > DRY_TEXTURE_ABS){
-      obs.push('Your skin reads fairly matte overall, with a bit more visible texture than shine.');
-    }
-    if (cls.rednessDelta > REDNESS_DELTA_THRESHOLD){
-      obs.push('A little more redness than average, mostly around the cheeks and nose.');
-    }
-    if (cls.faceTexture > DRY_TEXTURE_ABS + 4){
-      obs.push('Slightly more visible texture than average — this can mean visible detail, dryness, or just photo sharpness.');
-    }
-    if (Math.abs(cls.tZoneShineDelta) < 0.02 && Math.abs(cls.cheekShineDelta) < 0.02){
-      obs.push('Your skin reads fairly even across regions today — no one area standing out.');
-    }
-    const fillers = [
-      'Lighting and camera quality affect a read like this more than a lab measurement would — treat this as a starting point, not a precise number.',
-      'Skin can look different morning to evening, so a second read on a different day might tell a slightly different story.',
-      "This read only covers what's visible in the photo — hydration and oil below the surface aren't something a photo can show."
-    ];
-    let i = 0;
-    while (obs.length < 3 && i < fillers.length){
-      obs.push(fillers[i]);
-      i++;
-    }
-    return obs.slice(0, 5);
+function stopCamera(){
+  if (stream){ stream.getTracks().forEach(t => t.stop()); stream = null; }
+}
+
+/* ---------- phases ---------- */
+
+function phaseIdle(){
+  stopCamera();
+  hide(els.video); hide(els.still); show(els.placeholder); hide(els.brackets); hide(els.pins);
+  show(els.idle); hide(els.camera); hide(els.preview);
+  setStatus('');
+}
+
+async function phaseCamera(){
+  if (!navigator.mediaDevices?.getUserMedia){
+    setStatus("Camera isn't available here — try uploading a photo instead.");
+    return;
   }
-
-  function runHeuristicAnalysis(canvas, regionBoxes){
-    const metrics = computeAllMetrics(canvas, regionBoxes);
-    const cls = classifySkin(metrics);
-    const regions = {
-      forehead: REGION_PHRASES.forehead[shineLabel(metrics.forehead.shineFraction - metrics.face.shineFraction)],
-      t_zone: REGION_PHRASES.tzone[shineLabel(metrics.tzone.shineFraction - metrics.face.shineFraction)],
-      cheeks: REGION_PHRASES.cheeks[shineLabel(cls.cheekShineDelta)],
-      chin: REGION_PHRASES.chin[shineLabel(metrics.chin.shineFraction - metrics.face.shineFraction)]
-    };
-    return {
-      skin_type: cls.skinType,
-      type_note: TYPE_NOTES[cls.skinType],
-      regions: regions,
-      observations: buildObservations(cls),
-      routine: ROUTINES[cls.skinType],
-      ingredients_to_look_for: INGREDIENTS_LOOK_FOR[cls.skinType],
-      ease_in_slowly: INGREDIENTS_EASE_IN[cls.skinType],
-      note: 'This read comes from color and shine patterns in the photo, not a lab measurement. See a dermatologist about anything persistent or concerning.'
-    };
-  }
-
-  /* ---------- UI plumbing (capture / preview / camera) ---------- */
-
-  function show(el){ el.hidden = false; }
-  function hide(el){ el.hidden = true; }
-  function setStatus(msg){ statusLine.textContent = msg || ''; }
-
-  function stopCamera(){
-    if (currentStream){
-      currentStream.getTracks().forEach(t => t.stop());
-      currentStream = null;
-    }
-  }
-
-  function resizeDataUrl(dataUrl, maxDim){
-    return new Promise((resolve) => {
-      const img = new Image();
-      img.onload = () => {
-        let { width, height } = img;
-        if (width > height && width > maxDim){ height = Math.round(height * (maxDim / width)); width = maxDim; }
-        else if (height > maxDim){ width = Math.round(width * (maxDim / height)); height = maxDim; }
-        const canvas = document.createElement('canvas');
-        canvas.width = width; canvas.height = height;
-        canvas.getContext('2d').drawImage(img, 0, 0, width, height);
-        resolve(canvas.toDataURL('image/jpeg', 0.9));
-      };
-      img.onerror = () => resolve(dataUrl);
-      img.src = dataUrl;
-    });
-  }
-
-  function drawToWorkingCanvas(dataUrl){
-    return new Promise((resolve, reject) => {
-      const img = new Image();
-      img.onload = () => {
-        const canvas = document.createElement('canvas');
-        canvas.width = img.naturalWidth;
-        canvas.height = img.naturalHeight;
-        canvas.getContext('2d').drawImage(img, 0, 0);
-        resolve(canvas);
-      };
-      img.onerror = reject;
-      img.src = dataUrl;
-    });
-  }
-
-  function goIdlePhase(){
-    stopCamera();
-    hide(video); hide(preview); show(frameIcon); hide(faceGuide); hide(markersEl);
-    show(controlsIdle); hide(controlsCamera); hide(controlsPreview);
+  try{
+    stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' }, audio: false });
+    els.video.srcObject = stream;
+    hide(els.still); show(els.video); hide(els.placeholder); show(els.brackets); hide(els.pins);
+    hide(els.idle); show(els.camera); hide(els.preview);
     setStatus('');
+  }catch(err){
+    console.error('Camera error', err);
+    setStatus("Camera isn't available here — try uploading a photo instead.");
   }
+}
 
-  async function goCameraPhase(){
-    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){
-      setStatus("Camera isn't available here — try uploading a photo instead.");
+function phasePreview(dataUrl){
+  stopCamera();
+  workingPhotoUrl = dataUrl;
+  els.still.src = dataUrl;
+  show(els.still); hide(els.video); hide(els.placeholder); hide(els.brackets); hide(els.pins);
+  hide(els.idle); hide(els.camera); show(els.preview);
+  setStatus('');
+}
+
+function showError(message){
+  hide(els.captureCard); hide(els.resultsCard); show(els.errorCard);
+  els.errorText.textContent = message;
+}
+
+/* ---------- image helpers ---------- */
+
+function downscale(dataUrl, maxDim){
+  return new Promise(resolve => {
+    const img = new Image();
+    img.onload = () => {
+      let { width, height } = img;
+      if (width > height && width > maxDim){ height = Math.round(height * maxDim / width); width = maxDim; }
+      else if (height > maxDim){ width = Math.round(width * maxDim / height); height = maxDim; }
+      const canvas = document.createElement('canvas');
+      canvas.width = width; canvas.height = height;
+      canvas.getContext('2d').drawImage(img, 0, 0, width, height);
+      resolve(canvas.toDataURL('image/jpeg', 0.9));
+    };
+    img.onerror = () => resolve(dataUrl);
+    img.src = dataUrl;
+  });
+}
+
+function toCanvas(dataUrl){
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      canvas.width = img.naturalWidth; canvas.height = img.naturalHeight;
+      canvas.getContext('2d').drawImage(img, 0, 0);
+      resolve(canvas);
+    };
+    img.onerror = reject;
+    img.src = dataUrl;
+  });
+}
+
+/* ---------- scan pins ---------- */
+
+function pinPositions(rects, imgW, imgH){
+  const center = (rect, tag) => ({ tag, x: ((rect.x + rect.w / 2) / imgW) * 100, y: ((rect.y + rect.h / 2) / imgH) * 100 });
+  return [
+    center(rects.forehead, 'FOREHEAD'),
+    center(rects.cheekL, 'L CHEEK'),
+    center(rects.cheekR, 'R CHEEK'),
+    center(rects.tzone, 'NOSE'),
+    center(rects.chin, 'CHIN')
+  ];
+}
+
+function animatePins(positions){
+  els.pins.innerHTML = positions.map((p, i) => `
+    <div class="pin" style="left:${p.x}%; top:${p.y}%">
+      <span class="pin-badge">${i + 1}</span>
+      <span class="pin-tag">${p.tag}</span>
+    </div>`).join('');
+  show(els.pins);
+  Array.from(els.pins.children).forEach((el, i) => {
+    setTimeout(() => el.classList.add('on'), 180 + i * 340);
+  });
+}
+
+function cycleStatus(){
+  let i = 0;
+  setStatus(CFG.statusPhrases[0]);
+  statusTimer = setInterval(() => {
+    i = (i + 1) % CFG.statusPhrases.length;
+    setStatus(CFG.statusPhrases[i]);
+  }, 750);
+}
+function stopStatusCycle(){ clearInterval(statusTimer); setStatus(''); }
+
+/* ---------- results rendering ---------- */
+
+function escapeHtml(str){
+  const div = document.createElement('div');
+  div.textContent = str ?? '';
+  return div.innerHTML;
+}
+
+function regionRow(label, text){
+  return `<div class="region-row"><span class="region-bar"></span><div class="region-copy"><div class="region-name">${label}</div><div class="region-detail">${escapeHtml(text)}</div></div></div>`;
+}
+
+function renderResults(reading){
+  const { regions, observations, routine, ingredientsNow, ingredientsLater } = reading;
+
+  els.resultsCard.innerHTML = `
+    <div class="eyebrow">Your skin type</div>
+    <div class="hero">
+      <div class="hero-glyph">${escapeHtml(reading.skinType[0])}</div>
+      <div>
+        <div class="hero-name">${escapeHtml(reading.skinType)}</div>
+        <p class="hero-note">${escapeHtml(reading.typeSummary)}</p>
+      </div>
+    </div>
+
+    <div class="eyebrow">By region</div>
+    <div class="region-rows">
+      ${regionRow('FOREHEAD', regions.forehead)}
+      ${regionRow('T-ZONE', regions.t_zone)}
+      ${regionRow('CHEEKS', regions.cheeks)}
+      ${regionRow('CHIN', regions.chin)}
+    </div>
+
+    <div class="eyebrow">What stood out</div>
+    <ul class="note-list">${observations.map(o => `<li>${escapeHtml(o)}</li>`).join('')}</ul>
+
+    <div class="eyebrow">Your routine</div>
+    <div class="timeline">
+      <div><div class="timeline-head">AM</div><ul class="timeline-steps">${routine.am.map(s => `<li>${escapeHtml(s)}</li>`).join('')}</ul></div>
+      <div><div class="timeline-head">PM</div><ul class="timeline-steps">${routine.pm.map(s => `<li>${escapeHtml(s)}</li>`).join('')}</ul></div>
+    </div>
+
+    <div class="eyebrow">Ingredients to look for</div>
+    <ul class="tag-list">${ingredientsNow.map(i => `<li class="tag">${escapeHtml(i)}</li>`).join('')}</ul>
+
+    <div class="eyebrow">Ease in slowly</div>
+    <ul class="tag-list muted">${ingredientsLater.map(i => `<li class="tag">${escapeHtml(i)}</li>`).join('')}</ul>
+
+    <p class="fineprint">${escapeHtml(reading.footnote)}</p>
+    <div class="row"><button class="btn btn-outline" id="startOverBtn">Start over</button></div>
+  `;
+
+  document.getElementById('startOverBtn').addEventListener('click', () => {
+    hide(els.resultsCard); show(els.captureCard); phaseIdle();
+  });
+}
+
+/* ---------- run the read ---------- */
+
+async function runRead(){
+  hide(els.preview);
+  cycleStatus();
+  const minDelay = new Promise(r => setTimeout(r, CFG.resultRevealMs));
+
+  try{
+    const canvas = await toCanvas(workingPhotoUrl);
+    const { box, noFace } = await detectFaceBox(canvas);
+
+    if (noFace){
+      await minDelay;
+      stopStatusCycle();
+      showError("We couldn't quite find a face in that photo. Try again with even lighting, facing the camera directly.");
       return;
     }
-    try{
-      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' }, audio: false });
-      currentStream = stream;
-      video.srcObject = stream;
-      hide(preview); show(video); hide(frameIcon); show(faceGuide); hide(markersEl);
-      hide(controlsIdle); show(controlsCamera); hide(controlsPreview);
-      setStatus('');
-    }catch(err){
-      console.error('Camera error', err);
-      setStatus("Camera isn't available here — try uploading a photo instead.");
-    }
+
+    const rects = regionRectsFromFaceBox(box);
+    animatePins(pinPositions(rects, canvas.width, canvas.height));
+
+    const reading = buildReading(canvas, rects);
+
+    await minDelay;
+    stopStatusCycle();
+    renderResults(reading);
+    hide(els.captureCard); show(els.resultsCard);
+  }catch(err){
+    console.error(err);
+    try{ await minDelay; }catch{}
+    stopStatusCycle();
+    showError('Something went wrong reading that photo. Please try again.');
   }
+}
 
-  function goPreviewPhase(dataUrl){
-    stopCamera();
-    currentImageDataUrl = dataUrl;
-    preview.src = dataUrl;
-    show(preview); hide(video); hide(frameIcon); hide(faceGuide); hide(markersEl);
-    hide(controlsIdle); hide(controlsCamera); show(controlsPreview);
-    setStatus('');
-  }
+/* ---------- wiring ---------- */
 
-  /* ---------- Scan markers, positioned from real detected regions when available ---------- */
-
-  function buildMarkers(positions){
-    markersEl.innerHTML = '';
-    positions.forEach((m) => {
-      const el = document.createElement('div');
-      el.className = 'marker';
-      el.style.left = m.x + '%';
-      el.style.top = m.y + '%';
-      el.innerHTML = '<span class="marker-dot"></span><span class="marker-label">' + m.label + '</span>';
-      markersEl.appendChild(el);
-    });
-  }
-
-  function animateMarkers(positions){
-    buildMarkers(positions);
-    show(markersEl);
-    const markerEls = Array.from(markersEl.children);
-    markerEls.forEach((el, i) => {
-      setTimeout(() => el.classList.add('active'), 200 + i * 380);
-    });
-  }
-
-  function regionBoxesToMarkerPositions(boxes, imgW, imgH){
-    function center(box, label){
-      return { label: label, x: ((box.x + box.w/2) / imgW) * 100, y: ((box.y + box.h/2) / imgH) * 100 };
-    }
-    return [
-      center(boxes.forehead, 'FOREHEAD'),
-      center(boxes.cheekL, 'L CHEEK'),
-      center(boxes.cheekR, 'R CHEEK'),
-      center(boxes.tzone, 'NOSE'),
-      center(boxes.chin, 'CHIN')
-    ];
-  }
-
-  const STATUS_PHRASES = ['Finding your face…', 'Reading shine and texture…', 'Comparing regions…'];
-  function cycleStatus(){
-    let i = 0;
-    setStatus(STATUS_PHRASES[0]);
-    statusInterval = setInterval(() => {
-      i = (i + 1) % STATUS_PHRASES.length;
-      setStatus(STATUS_PHRASES[i]);
-    }, 800);
-  }
-  function stopStatusCycle(){
-    clearInterval(statusInterval);
-    setStatus('');
-  }
-
-  function escapeHtml(str){
-    const div = document.createElement('div');
-    div.textContent = (str === undefined || str === null) ? '' : String(str);
-    return div.innerHTML;
-  }
-
-  function regionItem(label, text){
-    return '<div class="region-item"><div class="region-label">' + label + '</div><div class="region-text">' + escapeHtml(text || '—') + '</div></div>';
-  }
-
-  function renderResults(data){
-    const regions = data.regions || {};
-    const obs = Array.isArray(data.observations) ? data.observations : [];
-    const am = (data.routine && Array.isArray(data.routine.am)) ? data.routine.am : [];
-    const pm = (data.routine && Array.isArray(data.routine.pm)) ? data.routine.pm : [];
-    const look = Array.isArray(data.ingredients_to_look_for) ? data.ingredients_to_look_for : [];
-    const ease = Array.isArray(data.ease_in_slowly) ? data.ease_in_slowly : [];
-
-    resultsPanel.innerHTML =
-      '<div class="type-eyebrow">Your skin type</div>' +
-      '<div class="type-badge"><span class="type-name">' + escapeHtml(data.skin_type || 'Combination') + '</span></div>' +
-      '<p class="type-note">' + escapeHtml(data.type_note || '') + '</p>' +
-
-      '<div class="section-eyebrow">Regions</div>' +
-      '<div class="region-grid">' +
-        regionItem('FOREHEAD', regions.forehead) +
-        regionItem('T-ZONE', regions.t_zone) +
-        regionItem('CHEEKS', regions.cheeks) +
-        regionItem('CHIN', regions.chin) +
-      '</div>' +
-
-      '<div class="section-eyebrow">What we noticed</div>' +
-      '<ul class="obs-list">' + obs.map(o => '<li>' + escapeHtml(o) + '</li>').join('') + '</ul>' +
-
-      '<div class="section-eyebrow">Your routine</div>' +
-      '<div class="routine-grid">' +
-        '<div class="routine-col"><div class="routine-label">AM</div><ol>' + am.map(s => '<li>' + escapeHtml(s) + '</li>').join('') + '</ol></div>' +
-        '<div class="routine-col"><div class="routine-label">PM</div><ol>' + pm.map(s => '<li>' + escapeHtml(s) + '</li>').join('') + '</ol></div>' +
-      '</div>' +
-
-      '<div class="section-eyebrow">Ingredients to look for</div>' +
-      '<ul class="chip-list">' + look.map(i => '<li class="chip">' + escapeHtml(i) + '</li>').join('') + '</ul>' +
-
-      '<div class="section-eyebrow">Ease in slowly</div>' +
-      '<ul class="chip-list chip-list-muted">' + ease.map(i => '<li class="chip">' + escapeHtml(i) + '</li>').join('') + '</ul>' +
-
-      '<p class="note">' + escapeHtml(data.note || 'This is cosmetic guidance, not a medical diagnosis. See a dermatologist for anything persistent or concerning.') + '</p>' +
-
-      '<div class="controls"><button class="btn btn-ghost" id="startOverBtn">Start over</button></div>';
-
-    document.getElementById('startOverBtn').addEventListener('click', () => {
-      hide(resultsPanel); show(capturePanel); goIdlePhase();
-    });
-  }
-
-  function showErrorPanel(msg){
-    hide(capturePanel); hide(resultsPanel); show(errorPanel);
-    errorText.textContent = msg;
-  }
-
-  async function runAnalysis(){
-    hide(controlsPreview);
-    cycleStatus();
-    const minWait = new Promise(r => setTimeout(r, 2200));
-
-    try{
-      const canvas = await drawToWorkingCanvas(currentImageDataUrl);
-      const faceBoxResult = await getFaceBox(canvas);
-
-      if (faceBoxResult === 'no_face'){
-        await minWait;
-        stopStatusCycle();
-        showErrorPanel("We couldn't quite find a face in that photo. Try again with even lighting, facing the camera directly.");
-        return;
-      }
-
-      const box = faceBoxResult || fallbackFaceBox(canvas.width, canvas.height);
-      const regionBoxes = regionsFromFaceBox(box[0], box[1], box[2], box[3]);
-
-      animateMarkers(regionBoxesToMarkerPositions(regionBoxes, canvas.width, canvas.height));
-
-      const result = runHeuristicAnalysis(canvas, regionBoxes);
-
-      await minWait;
-      stopStatusCycle();
-      renderResults(result);
-      hide(capturePanel); show(resultsPanel);
-    }catch(err){
-      console.error(err);
-      try{ await minWait; }catch(e){}
-      stopStatusCycle();
-      showErrorPanel('Something went wrong analyzing that photo. Please try again.');
-    }
-  }
-
-  cameraBtn.addEventListener('click', goCameraPhase);
-  uploadBtn.addEventListener('click', () => fileInput.click());
-  fileInput.addEventListener('change', (e) => {
-    const file = e.target.files && e.target.files[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => resizeDataUrl(reader.result, 900).then(goPreviewPhase);
-    reader.readAsDataURL(file);
-    fileInput.value = '';
-  });
-  captureBtn.addEventListener('click', () => {
-    const canvas = document.createElement('canvas');
-    canvas.width = video.videoWidth || 720;
-    canvas.height = video.videoHeight || 720;
-    canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
-    resizeDataUrl(canvas.toDataURL('image/jpeg', 0.92), 900).then(goPreviewPhase);
-  });
-  cancelBtn.addEventListener('click', goIdlePhase);
-  retakeBtn.addEventListener('click', goIdlePhase);
-  analyzeBtn.addEventListener('click', runAnalysis);
-  retryBtn.addEventListener('click', () => {
-    hide(errorPanel); show(capturePanel); goIdlePhase();
-  });
-
-  goIdlePhase();
+els.cameraBtn.addEventListener('click', phaseCamera);
+els.uploadBtn.addEventListener('click', () => els.fileInput.click());
+els.fileInput.addEventListener('change', (e) => {
+  const file = e.target.files?.[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = () => downscale(reader.result, 900).then(phasePreview);
+  reader.readAsDataURL(file);
+  els.fileInput.value = '';
 });
+els.captureBtn.addEventListener('click', () => {
+  const canvas = document.createElement('canvas');
+  canvas.width = els.video.videoWidth || 720;
+  canvas.height = els.video.videoHeight || 720;
+  canvas.getContext('2d').drawImage(els.video, 0, 0, canvas.width, canvas.height);
+  downscale(canvas.toDataURL('image/jpeg', 0.92), 900).then(phasePreview);
+});
+els.cancelBtn.addEventListener('click', phaseIdle);
+els.retakeBtn.addEventListener('click', phaseIdle);
+els.analyzeBtn.addEventListener('click', runRead);
+els.retryBtn.addEventListener('click', () => { hide(els.errorCard); show(els.captureCard); phaseIdle(); });
+
+phaseIdle();
 </script>
 </body>
 </html>
