@@ -410,6 +410,10 @@ const CFG = {
   // source in supabase/functions/skin-guide/): only the skin type and answers.
   // This is the Supabase *anon* key — it is designed to be public and is gated
   // by row-level security, unlike the service_role key, which must never ship.
+  // Groq retires model ids periodically. If the chat reports a model error,
+  // pick a current one from console.groq.com/docs/models and change this.
+  groqModel: 'llama-3.3-70b-versatile',
+
   supabase: {
     url: 'https://yhmlackdugtafthxschn.supabase.co',
     anonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlobWxhY2tkdWd0YWZ0aHhzY2huIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODY4ODc5MzMsImV4cCI6MjEwMjQ2MzkzM30.tyaU5CNaDxD95dkgsaBHOCCUH0YcuFbNvLKRF1UrEp4',
@@ -1755,6 +1759,7 @@ function renderPlan(plan, fromAI){
 
 let chatHistory = [];
 let chatBusy = false;
+let chatPending = null;   // question held back while we ask for a key
 
 const CHAT_STARTERS = [
   'What should I do about oily skin?',
@@ -1763,9 +1768,84 @@ const CHAT_STARTERS = [
   'What order do I apply things in?'
 ];
 
+/* Bring-your-own-key: a Groq key is a SECRET, unlike the Supabase anon key, so
+   it must never be committed or embedded in the page. Instead each person pastes
+   their own; it stays in this browser (sessionStorage, cleared when the tab
+   closes) and is sent only to Groq. Nothing about it reaches this repo, and one
+   person's key is never visible to another. */
+const KEY_STORE = 'skinprint_groq_key';
+const GROQ_URL = 'https://api.groq.com/openai/v1/chat/completions';
+
+function getUserKey(){
+  try{ return sessionStorage.getItem(KEY_STORE) || ''; }catch{ return ''; }
+}
+function setUserKey(k){
+  try{ k ? sessionStorage.setItem(KEY_STORE, k) : sessionStorage.removeItem(KEY_STORE); }catch{}
+}
+
+const CHAT_SYSTEM = `You are a warm, practical skincare and haircare assistant in a cosmetic app used in India. You are talking with someone one-to-one.
+
+Hard rules that override anything the person asks for:
+- Cosmetic and lifestyle guidance only. Never diagnose. Never name a medical condition (no acne vulgaris, rosacea, eczema, dermatitis, alopecia, fungal anything) — describe what someone sees instead.
+- Never claim anything cures, treats, heals, or regrows. Say "may help", "many people find", "worth trying".
+- Only gentle over-the-counter ingredients and safe kitchen-shelf options: honey, aloe vera, cooled green tea, colloidal oatmeal, plain yoghurt, rose water, multani mitti, coconut and almond oil, amla, methi, rice water.
+- NEVER suggest lemon or lime juice, baking soda, toothpaste, undiluted essential oils, sugar or salt face scrubs, alum, raw garlic, ginger, or vinegar on skin. If asked, explain plainly why they burn skin or wreck the barrier.
+- No prescription actives (no tretinoin, minoxidil, steroids, antibiotics), no dosages, no supplements, nothing oral.
+- Tell people to patch test anything new for 24 hours.
+- Assume no age gate: everything must be safe for a teenager.
+- If someone describes something painful, spreading, bleeding, or not healing, say plainly it is worth seeing a dermatologist, without naming what it might be.
+
+Keep replies short — two or three sentences unless asked for detail. Be specific and practical, not generic.`;
+
+async function callGroq(messages, context){
+  const key = getUserKey();
+  if (!key) return { error: 'nokey' };
+
+  const system = context
+    ? `${CHAT_SYSTEM}\n\nWhat this app measured from their photo (use when relevant, don't recite it back): ${context}`
+    : CHAT_SYSTEM;
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 30000);
+  try{
+    const res = await fetch(GROQ_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${key}` },
+      body: JSON.stringify({
+        model: CFG.groqModel,
+        max_tokens: 1000,
+        messages: [{ role: 'system', content: system }, ...messages]
+      }),
+      signal: controller.signal
+    });
+
+    if (!res.ok){
+      let detail = '';
+      try{ detail = (await res.json())?.error?.message || ''; }catch{}
+      if (res.status === 401) return { error: 'badkey' };
+      if (res.status === 429) return { error: 'ratelimit' };
+      // Groq retires model names periodically — surface the real message so a
+      // dead model reads as "model not found", not as a generic breakage.
+      return { error: 'api', detail: detail || `Groq returned ${res.status}.` };
+    }
+
+    const data = await res.json();
+    const reply = data?.choices?.[0]?.message?.content;
+    return reply ? { reply } : { error: 'api', detail: 'Groq returned an empty reply.' };
+  }catch(err){
+    if (err?.name === 'AbortError') return { error: 'api', detail: 'Groq took too long to answer.' };
+    return { error: 'network' };
+  }finally{
+    clearTimeout(timer);
+  }
+}
+
 async function sendChat(messages, context){
+  // A pasted key wins: it needs no deployment, so it is the path that works today.
+  if (getUserKey()) return callGroq(messages, context);
+
   const cfg = CFG.supabase;
-  if (!cfg?.url || !cfg?.anonKey) return { error: 'unconfigured' };
+  if (!cfg?.url || !cfg?.anonKey) return { error: 'nokey' };
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 30000);
   try{
@@ -1780,11 +1860,11 @@ async function sendChat(messages, context){
       signal: controller.signal
     });
     if (res.status === 429) return { error: 'ratelimit' };
-    if (!res.ok) return { error: 'offline' };
+    if (!res.ok) return { error: 'nokey' };
     const data = await res.json();
-    return data?.reply ? { reply: data.reply } : { error: 'offline' };
+    return data?.reply ? { reply: data.reply } : { error: 'nokey' };
   }catch{
-    return { error: 'offline' };
+    return { error: 'nokey' };
   }finally{
     clearTimeout(timer);
   }
@@ -1805,12 +1885,14 @@ function openChat(){
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
-function renderChat(offlineReason){
+function renderChat(offlineReason, detail){
   const ctx = chatContext();
+  const keyed = !!getUserKey();
   els.chatCard.innerHTML = `
     <p class="sec-title">Ask about your skin or hair</p>
     ${ctx ? `<p class="plan-src">Knows your read: ${escapeHtml(ctx)}</p>` : ''}
-    ${offlineReason ? offlinePanel(offlineReason) : ''}
+    ${keyed && !offlineReason ? `<p class="plan-src">Connected with your own Groq key — kept in this tab only. <button class="starter" id="forgetKeyBtn" style="padding:3px 9px;font-size:0.72rem">Forget key</button></p>` : ''}
+    ${offlineReason ? offlinePanel(offlineReason, detail) : ''}
     <div class="chat-log" id="chatLog">${
       chatHistory.length
         ? chatHistory.map(m => `<div class="msg ${m.role === 'user' ? 'user' : 'bot'}">${escapeHtml(m.content)}</div>`).join('')
@@ -1839,22 +1921,66 @@ function renderChat(offlineReason){
     btn.addEventListener('click', () => submitChat(btn.dataset.q)));
   document.getElementById('chatBack').addEventListener('click', leaveChat);
 
+  const keyForm = document.getElementById('keyForm');
+  if (keyForm){
+    const keyInput = document.getElementById('keyInput');
+    keyForm.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const k = keyInput.value.trim();
+      if (!k) return;
+      setUserKey(k);
+      // Retry the question that triggered the prompt, if there was one.
+      const pendingQ = chatPending;
+      chatPending = null;
+      renderChat();
+      if (pendingQ) submitChat(pendingQ);
+    });
+    keyInput.focus();
+  }
+
+  const clearBtn = document.getElementById('clearKeyBtn');
+  if (clearBtn) clearBtn.addEventListener('click', () => { setUserKey(''); chatPending = null; renderChat('nokey'); });
+
+  const forget = document.getElementById('forgetKeyBtn');
+  if (forget) forget.addEventListener('click', () => {
+    setUserKey(''); chatHistory = []; chatPending = null; renderChat();
+  });
+
   const log = document.getElementById('chatLog');
   log.scrollTop = log.scrollHeight;
-  if (chatHistory.length) input.focus();
+  if (chatHistory.length && !keyForm) input.focus();
 }
 
-// No canned answers pretending to be a model. If the backend is not there, say
-// exactly that and what it takes to turn it on.
-function offlinePanel(reason){
+// No canned answers pretending to be a model. Every failure says what happened
+// and what would fix it.
+function offlinePanel(reason, detail){
   if (reason === 'ratelimit'){
-    return `<div class="chat-offline"><p>That's too many questions in a row — the backend allows five a minute. Give it a moment and ask again.</p></div>`;
+    return `<div class="chat-offline"><p>Too many questions in a row — that's Groq's free-tier rate limit, not an error. Give it a moment and ask again.</p></div>`;
+  }
+  if (reason === 'badkey'){
+    return `<div class="chat-offline">
+      <p><strong>Groq rejected that key.</strong> It may be mistyped, revoked, or from a different account.</p>
+      <p><button class="starter" id="clearKeyBtn">Enter a different key</button></p>
+    </div>`;
+  }
+  if (reason === 'network'){
+    return `<div class="chat-offline">
+      <p><strong>Couldn't reach Groq.</strong> Check your connection. If you're opening this page from a <code>file://</code> path, browsers block the request — use the deployed link instead.</p>
+    </div>`;
+  }
+  if (reason === 'api'){
+    return `<div class="chat-offline">
+      <p><strong>Groq returned an error:</strong> ${escapeHtml(detail || 'unknown')}</p>
+      <p>If it mentions the model, Groq has retired <code>${escapeHtml(CFG.groqModel)}</code> — pick a current one from console.groq.com and change <code>groqModel</code> in the source.</p>
+    </div>`;
   }
   return `<div class="chat-offline">
-    <p><strong>The chat isn't connected yet.</strong> This is the one part of the app that genuinely needs an AI model behind it, and no key is configured — so rather than invent an answer, it tells you.</p>
-    <p>To turn it on, deploy the function in <code>supabase/functions/skin-guide/</code> and give it a key:</p>
-    <p><code>supabase secrets set ANTHROPIC_API_KEY=sk-ant-…</code><br><code>supabase functions deploy skin-guide --no-verify-jwt</code></p>
-    <p>Everything else — the photo read, both care plans, the styling tips — runs on your device and needs none of this.</p>
+    <p><strong>The chat needs a key to answer.</strong> Everything else in this app — the photo read, both care plans, the styling tips — runs on your device, but a conversation needs a real model behind it, so rather than invent replies it asks you first.</p>
+    <p>Groq's free tier covers this. Get a key at <strong>console.groq.com/keys</strong> and paste it below. It is kept in this browser tab only, sent to Groq and nowhere else, and never saved to the project.</p>
+    <form class="chat-form" id="keyForm" style="margin-top:14px">
+      <input class="chat-input" id="keyInput" type="password" placeholder="gsk_…" autocomplete="off" spellcheck="false" style="min-height:auto">
+      <button class="btn btn-primary chat-send" type="submit">Save</button>
+    </form>
   </div>`;
 }
 
@@ -1877,11 +2003,14 @@ async function submitChat(text){
 
   if (result.reply){
     chatHistory.push({ role: 'assistant', content: result.reply });
+    chatPending = null;
     renderChat();
   } else {
-    // Drop the unanswered question so the transcript doesn't imply a reply came.
+    // Drop the unanswered question so the transcript doesn't imply a reply came,
+    // but hold on to it so it can be re-sent once a key is entered.
     chatHistory.pop();
-    renderChat(result.error);
+    chatPending = q;
+    renderChat(result.error, result.detail);
   }
 }
 

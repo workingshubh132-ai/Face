@@ -19,6 +19,12 @@
 const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY");
 const MODEL = Deno.env.get("ANTHROPIC_MODEL") ?? "claude-opus-5";
 
+// Groq is an alternative provider with a usable free tier. Set GROQ_API_KEY and
+// it is used for chat instead of Anthropic — no other change needed. Its API is
+// OpenAI-shaped, so the request/response differ from the Anthropic calls below.
+const GROQ_API_KEY = Deno.env.get("GROQ_API_KEY");
+const GROQ_MODEL = Deno.env.get("GROQ_MODEL") ?? "llama-3.3-70b-versatile";
+
 // Rate limiting: in-memory, so it resets on cold start and is per-instance
 // rather than global. Good enough to blunt casual abuse of a free endpoint;
 // for a real ceiling, move the counter into a Postgres table or Upstash Redis.
@@ -165,6 +171,32 @@ async function handleChat(payload: {
     ? `${SYSTEM_CHAT}\n\nWhat the app measured from this person's photo (use it when relevant, do not recite it back): ${context}`
     : SYSTEM_CHAT;
 
+  if (GROQ_API_KEY) {
+    const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${GROQ_API_KEY}`,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        model: GROQ_MODEL,
+        max_tokens: 1000,
+        messages: [{ role: "system", content: system }, ...messages],
+      }),
+    });
+    if (!res.ok) {
+      const detail = await res.text();
+      console.error("Groq chat error", res.status, detail);
+      // Pass the provider's message through: Groq retires model ids, and a dead
+      // model should read as such rather than as a generic upstream failure.
+      return json({ error: `Groq: ${detail.slice(0, 300)}` }, 502);
+    }
+    const data = await res.json();
+    const reply = data?.choices?.[0]?.message?.content;
+    if (!reply) return json({ error: "Empty model response" }, 502);
+    return json({ reply });
+  }
+
   const res = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
     headers: {
@@ -199,12 +231,6 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
   if (req.method !== "POST") return json({ error: "POST only" }, 405);
 
-  if (!ANTHROPIC_API_KEY) {
-    // The client treats any non-200 as "fall back to the on-device guide",
-    // so an unconfigured deployment degrades quietly rather than breaking.
-    return json({ error: "ANTHROPIC_API_KEY not configured" }, 503);
-  }
-
   const ip = req.headers.get("x-forwarded-for")?.split(",")[0].trim() ?? "unknown";
   if (rateLimited(ip)) {
     return json({ error: "Too many requests. Try again in a minute." }, 429);
@@ -224,13 +250,24 @@ Deno.serve(async (req) => {
     return json({ error: "Invalid JSON body" }, 400);
   }
 
+  // Which key is required depends on the mode, so this check comes after the
+  // body is read: chat can run on Groq alone, plans currently need Anthropic.
   if (payload.mode === "chat") {
+    if (!GROQ_API_KEY && !ANTHROPIC_API_KEY) {
+      return json({ error: "No model key configured (set GROQ_API_KEY or ANTHROPIC_API_KEY)" }, 503);
+    }
     try {
       return await handleChat(payload);
     } catch (err) {
       console.error("chat failed", err);
       return json({ error: "Chat failed" }, 500);
     }
+  }
+
+  if (!ANTHROPIC_API_KEY) {
+    // The client treats any non-200 as "fall back to the on-device guide",
+    // so an unconfigured deployment degrades quietly rather than breaking.
+    return json({ error: "ANTHROPIC_API_KEY not configured" }, 503);
   }
 
   const topic = payload.topic === "hair" ? "hair" : "skin";

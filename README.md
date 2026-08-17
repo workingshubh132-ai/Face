@@ -46,12 +46,30 @@ Every push to this branch redeploys automatically once the project is linked.
    that direct tab, not the embedded preview iframe, since browsers restrict
    camera permissions inside iframes by default.
 
-## Ask-a-question chat (needs an API key)
+## Ask-a-question chat (bring your own key)
 
-The chat is the one feature that cannot run on-device — it needs a real model
-behind it. Until the Edge Function below is deployed with an Anthropic API key,
-the chat says so plainly and shows the two commands to enable it. It never
-invents an answer or falls back to canned replies pretending to be a model.
+The chat is the one feature that cannot run on-device — a conversation needs a
+real model behind it. It never invents an answer or falls back to canned replies
+dressed up as AI; with no key it asks for one and says exactly why.
+
+**Groq's free tier covers this.** Get a key at
+[console.groq.com/keys](https://console.groq.com/keys) and paste it into the chat.
+It is held in `sessionStorage` for that browser tab only, sent to Groq and
+nowhere else, and cleared when the tab closes or you hit **Forget key**.
+
+> **Never commit a Groq key.** Unlike the Supabase anon key, it is a real secret.
+> This repo is public, and bots scrape public repos for exactly this pattern —
+> a committed key gets abused or auto-revoked quickly. That is why each person
+> pastes their own instead of it being baked into the page.
+
+If you deploy the Edge Function, it can serve the chat instead, with the key held
+server-side — set `GROQ_API_KEY` (free) or `ANTHROPIC_API_KEY` as a Supabase
+secret. The client prefers a pasted key when one is present, since that path
+needs no deployment.
+
+Groq retires model ids periodically. If the chat reports a model error, pick a
+current one from [console.groq.com/docs/models](https://console.groq.com/docs/models)
+and change `groqModel` in `index.html` (or the `GROQ_MODEL` secret).
 
 Everything else — the photo read, both care plans, the styling tips — runs
 entirely in the browser and needs no key at all.
@@ -106,8 +124,10 @@ you later add any, enable RLS on them before shipping.
 - The photo never leaves the browser tab. It is not uploaded, not stored, and
   not sent to the Edge Function — the function receives only the derived skin
   type and your questionnaire answers, as plain text.
-- Nothing is written to `localStorage`, `sessionStorage`, cookies, IndexedDB, or
-  any database.
+- Nothing about your photo or your answers is written to `localStorage`,
+  `sessionStorage`, cookies, IndexedDB, or any database. The single exception is
+  a Groq key you paste yourself, kept in `sessionStorage` so a refresh doesn't
+  lose it, and cleared when the tab closes or you hit "Forget key".
 - The only outbound requests are the one-time MediaPipe model download from a CDN
   and, if you deploy it, the natural-care-plan call described above.
 
