@@ -20,12 +20,32 @@ The whole app is `index.html` — no build step, no dependencies to install.
    drugstore products with rough rupee prices — kitchen-shelf remedies, and the
    DIY list to avoid (lemon juice, baking soda, toothpaste and friends cause
    real damage).
-5. **Hair plan** — its own questionnaire (hair type, scalp, concern, wash
-   frequency, heat use). Same shape: causes, triggers, myths, wash-day and
-   between-wash routines, products, remedies, damaging habits — plus **six
-   styling techniques matched to your hair type** and eight heat, brushing and
-   tension rules that hold whatever your hair does. Reachable without taking a
-   photo, since hair guidance needs no image.
+5. **Hair plan, from the same photo, with no questions at all.** The hair read
+   measures four things from the pixels: how tightly the hair bends (a
+   smoothed, curl-width comparison across each row), how much light comes back
+   off it, how many strands stand away from the mass, and how much background
+   shows through. Those pick the hair type and the concern, and the plan
+   appears — causes, triggers, myths, wash-day and between-wash routines,
+   products, remedies, damaging habits, **six styling techniques matched to
+   your hair type**, and eight heat, brushing and tension rules. If the reading
+   is wrong, two rows of chips at the top of the plan change the hair type or
+   the concern and it rebuilds instantly. The questionnaire is still there for
+   anyone who wants it, and it is the only route if you have no photo.
+
+### What the hair read refuses to guess
+
+Hair fall and scalp trouble are not offered as photo findings, because a picture
+of the outside of your hair cannot show either one. They appear only as
+corrections you choose yourself. The read also flags itself as borderline rather
+than confident when the measurement is genuinely shaky — heavy frizz blurs the
+shape it reads the curl pattern from, and hair too wispy to form a solid mass
+leaves almost nothing to measure.
+
+Straight versus wavy is the weakest call it makes; curly and coily separate
+cleanly. The thresholds come from a calibration harness that draws hair of known
+character — straight, wavy, curly, coily, glossy, matte, frizzy, sparse — and
+checks the measurements order correctly. That validates the maths, not accuracy
+on real heads, which is exactly why one tap overrides it.
 
 Cosmetic guidance only. Neither plan names a medical condition, and neither
 claims to treat, cure, or regrow anything. Where home care genuinely cannot fix

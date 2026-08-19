@@ -310,6 +310,8 @@
     font-family:var(--sans); cursor:pointer; transition:border-color .18s ease, color .18s ease;
   }
   .starter:hover{ border-color:var(--accent); color:var(--accent); }
+  .starter.on{ border-color:var(--accent); color:var(--accent); background:rgba(200,169,106,0.07); }
+  .chips{ display:flex; flex-wrap:wrap; gap:8px; }
 
   .fine{ font-size:0.82rem; color:var(--text-dim); line-height:1.55; margin:28px 0 20px; }
 
@@ -672,28 +674,102 @@ function readHairMetrics(canvas, faceBox){
   if (!skin) return null;
 
   const lums = [];
-  let edgeSum = 0, edgePairs = 0, considered = 0;
+  let considered = 0;
+  let fineSum = 0, finePairs = 0;      // neighbouring pixels: strand-level detail
+  let coarseSum = 0, coarsePairs = 0;  // pixels a curl-width apart: wave-level shape
+  let rowsWithHair = 0, breakSum = 0;  // hair→background flips across a row
+  let spanPixels = 0, gapPixels = 0;   // background caught inside the hair mass
+  let massPixels = 0;                  // hair sitting in runs, not loose strands
 
   for (const rect of Object.values(rects)){
     let img;
     try{ img = ctx.getImageData(Math.round(rect.x), Math.round(rect.y), Math.round(rect.w), Math.round(rect.h)); }
     catch{ continue; }
     const { data, width, height } = img;
+    // A wave is a shape several strands wide, so the coarse comparison steps
+    // across roughly that distance instead of to the next pixel.
+    const coarseStep = Math.max(3, Math.round(width * 0.05));
+    const isHair = new Uint8Array(width);
+    const rowLum = new Float32Array(width);
+    const smooth = new Float32Array(width);
+    const smoothOk = new Uint8Array(width);
+    const inMass = new Uint8Array(width);
 
     for (let y = 0; y < height; y++){
-      let prevLum = null; // reset per row so differences never wrap between rows
+      inMass.fill(0);
       for (let x = 0; x < width; x++){
         const i = (y * width + x) * 4;
         const px = { r: data[i], g: data[i+1], b: data[i+2] };
         considered++;
-        if (colorDist(px, bg) < HAIR_PIXEL_MIN_DIST || colorDist(px, skin) < HAIR_PIXEL_MIN_DIST){
-          prevLum = null;
-          continue;
+        const hair = colorDist(px, bg) >= HAIR_PIXEL_MIN_DIST && colorDist(px, skin) >= HAIR_PIXEL_MIN_DIST;
+        isHair[x] = hair ? 1 : 0;
+        if (hair){ rowLum[x] = Math.max(px.r, px.g, px.b); lums.push(rowLum[x]); }
+        else rowLum[x] = 0;
+      }
+
+      // Texture is measured inside the hair, away from its outline. Strands
+      // standing off the edge are frizz, and letting them into the texture
+      // numbers makes frizzy straight hair read as wavy — the shape of the hair
+      // and the state of its surface have to be measured separately.
+      // A stray strand is one or two pixels wide in a row; the hair mass is a
+      // long unbroken run. Separating them by run length is the physical
+      // distinction, and it keeps flyaways out of the texture numbers without
+      // any arbitrary trimming.
+      const minRun = Math.max(4, coarseStep);
+      let runStart = -1, lo = 0, hi = -1;
+      for (let x = 0; x <= width; x++){
+        const hair = x < width && isHair[x];
+        if (hair && runStart < 0) runStart = x;
+        if (!hair && runStart >= 0){
+          if (x - runStart >= minRun){
+            for (let k = runStart; k < x; k++) inMass[k] = 1;
+            if (hi < 0) lo = runStart;
+            hi = x - 1;
+          }
+          runStart = -1;
         }
-        const lum = Math.max(px.r, px.g, px.b);
-        lums.push(lum);
-        if (prevLum !== null){ edgeSum += Math.abs(lum - prevLum); edgePairs++; }
-        prevLum = lum;
+      }
+
+      for (let x = 0; x < width; x++) if (inMass[x]) massPixels++;
+
+      for (let x = Math.max(1, lo); x <= hi; x++){
+        if (inMass[x] && inMass[x-1]){ fineSum += Math.abs(rowLum[x] - rowLum[x-1]); finePairs++; }
+      }
+      // Shape is low-frequency by definition, so the row is smoothed over a
+      // curl-width window before the coarse comparison. Without that, a single
+      // stray strand contributes as much as a whole wave, and frizzy straight
+      // hair reads as curly.
+      if (hi > lo){
+        for (let x = lo; x <= hi; x++){
+          let sum = 0, n = 0;
+          for (let k = Math.max(lo, x - coarseStep); k <= Math.min(hi, x + coarseStep); k++){
+            if (inMass[k]){ sum += rowLum[k]; n++; }
+          }
+          smooth[x] = n ? sum / n : 0;
+          smoothOk[x] = n ? 1 : 0;
+        }
+        for (let x = lo + coarseStep; x <= hi; x++){
+          if (smoothOk[x] && smoothOk[x-coarseStep]){
+            coarseSum += Math.abs(smooth[x] - smooth[x-coarseStep]); coarsePairs++;
+          }
+        }
+      }
+
+      // A smooth head of hair crosses the background boundary twice per row.
+      // Every extra crossing is a strand standing away from the mass — which is
+      // what frizz physically is, and it is invisible to a brightness average.
+      let first = -1, last = -1, breaks = 0, bgSeen = 0;
+      for (let x = 0; x < width; x++){
+        if (isHair[x]){ if (first < 0) first = x; last = x; }
+        else bgSeen++;
+        if (x > 0 && isHair[x] !== isHair[x-1]) breaks++;
+      }
+      if (first >= 0 && last > first){
+        // Only rows that actually contain an edge say anything about strands
+        // standing away from the mass. A row buried inside the hair has no
+        // boundary to cross, and averaging those in washes the signal out.
+        if (bgSeen){ rowsWithHair++; breakSum += breaks; }
+        for (let x = first; x <= last; x++){ spanPixels++; if (!isHair[x]) gapPixels++; }
       }
     }
   }
@@ -714,41 +790,110 @@ function readHairMetrics(canvas, faceBox){
   let hits = 0;
   for (const l of lums) if (l > glossCut) hits++;
 
+  const breaksPerRow = rowsWithHair ? breakSum / rowsWithHair : 2;
+
   return {
     shine: hits / lums.length,
     texture: stdev(lums, avg) / avg,
-    edge: edgePairs ? (edgeSum / edgePairs) / avg : 0,
+    edge: finePairs ? (fineSum / finePairs) / avg : 0,
+    wave: coarsePairs ? (coarseSum / coarsePairs) / avg : 0,
+    flyaway: clamp((breaksPerRow - 2) / 12, 0, 1),
+    porosity: spanPixels ? gapPixels / spanPixels : 0,
+    mass: lums.length ? massPixels / lums.length : 0,
+    depth: avg / 255,
     coverage: lums.length / considered
   };
 }
 
-const HAIR_EDGE_CURLY = 0.055;   // above this, lots of high-frequency detail
-const HAIR_EDGE_WAVY  = 0.030;
+// Thresholds for the photo-only hair read, set from the synthetic calibration
+// in the notes below rather than guessed. `wave` is the shape metric — row
+// luminance smoothed over a curl-width window, so it rises with how tightly the
+// hair bends and ignores single strands. It was the only measure that ordered
+// cleanly with curl tightness; strand-level detail (`edge`) did not, so it is
+// used for surface roughness and never for hair type.
+const HAIR_WAVE_WAVY  = 0.036;
+const HAIR_WAVE_CURLY = 0.073;
+const HAIR_WAVE_COILY = 0.140;
+const HAIR_EDGE_ROUGH = 0.070;
 const HAIR_SHINE_DULL = 0.02;
+const HAIR_SHINE_GOOD = 0.06;
+const HAIR_FLYAWAY_HIGH = 0.35;
+const HAIR_MASS_THIN = 0.55;
 
-// Deliberately a *suggestion*, not a verdict. A photo can show gloss and
-// flyaways; it cannot reliably tell a wave from a curl, and it can never tell
-// how a scalp feels. The questionnaire pre-selects these and the user corrects.
-function suggestHairAnswers(m){
-  if (!m) return {};
-  const hairType = m.edge > HAIR_EDGE_CURLY ? 'curly'
-                 : m.edge > HAIR_EDGE_WAVY  ? 'wavy'
+// Everything here is a read of one photo in one light, so it is stated as a
+// reading and not a verdict, and the user can override it in one tap.
+function hairFromPhoto(m){
+  if (!m) return null;
+
+  const hairType = m.wave >= HAIR_WAVE_COILY ? 'coily'
+                 : m.wave >= HAIR_WAVE_CURLY ? 'curly'
+                 : m.wave >= HAIR_WAVE_WAVY  ? 'wavy'
                  : 'straight';
-  const concern = m.edge > HAIR_EDGE_CURLY ? 'frizz'
-                : m.shine < HAIR_SHINE_DULL ? 'dull'
-                : 'dry';
-  return { hairType, concern };
+
+  // Only the three concerns a camera can actually see. Hair fall and scalp
+  // trouble are deliberately absent: a photo of the outside of your hair cannot
+  // show either, and guessing at them would be inventing a finding.
+  const concern = m.flyaway >= HAIR_FLYAWAY_HIGH ? 'frizz'
+                : m.shine <= HAIR_SHINE_DULL     ? 'dull'
+                : m.edge >= HAIR_EDGE_ROUGH      ? 'dry'
+                : 'dull';
+
+  // Two things make the type read shaky, and both are worth admitting to.
+  // Heavy frizz blurs the shape it is measured from, and hair too wispy to form
+  // a solid mass leaves almost nothing to measure the shape on at all.
+  // Distance to the edges of the band it actually landed in — a coily reading
+  // is not made shaky by sitting far from the straight/wavy line.
+  const edges = { straight:[HAIR_WAVE_WAVY], wavy:[HAIR_WAVE_WAVY, HAIR_WAVE_CURLY],
+                  curly:[HAIR_WAVE_CURLY, HAIR_WAVE_COILY], coily:[HAIR_WAVE_COILY] }[hairType];
+  const distance = Math.min(...edges.map(t => Math.abs(m.wave - t) / t));
+  const confidence = (m.flyaway >= HAIR_FLYAWAY_HIGH || m.mass < HAIR_MASS_THIN || distance < 0.25)
+    ? 'borderline' : 'clear';
+
+  return { hairType, concern, confidence };
 }
+
+// Kept for the no-photo route, which still asks: it pre-selects what the photo
+// saw so those questions start from the picture rather than from nothing.
+function suggestHairAnswers(m){
+  const read = hairFromPhoto(m);
+  return read ? { hairType: read.hairType, concern: read.concern } : {};
+}
+
+const HAIR_TYPE_WORD = { straight:'straight', wavy:'wavy', curly:'curly', coily:'coily or tightly curled' };
+// The first three are what a photo can read; the last two only ever arrive as a
+// correction from the person, and are worded here so that sentence still reads.
+const HAIR_CONCERN_WORD = {
+  frizz:'frizz and flyaways', dull:'dullness', dry:'dryness and rough ends',
+  fall:'hair coming out more than usual', scalp:'scalp discomfort or flaking'
+};
 
 function hairReadout(m){
   if (!m) return null;
-  const gloss = m.shine > 0.06 ? 'Catching plenty of light — looks glossy.'
-              : m.shine < HAIR_SHINE_DULL ? 'Reading fairly flat, not much shine coming back.'
+  const read = hairFromPhoto(m);
+
+  const gloss = m.shine > HAIR_SHINE_GOOD ? 'Catching plenty of light — the surface is lying flat.'
+              : m.shine < HAIR_SHINE_DULL ? 'Reading flat: very little light is coming back off it.'
               : 'A moderate amount of shine.';
-  const surface = m.edge > HAIR_EDGE_CURLY ? 'Lots of texture and stray strands at the edges.'
-                : m.edge > HAIR_EDGE_WAVY ? 'Some movement and texture in the surface.'
-                : 'The surface reads smooth and even.';
-  return { gloss, surface, shinePct: Math.round(m.shine * 100), texturePct: Math.round(m.edge * 1000) };
+
+  const surface = read.hairType === 'coily' ? 'Tight, dense texture right down to the strand.'
+                : read.hairType === 'curly' ? 'Strong curl pattern with a lot of strand-level detail.'
+                : read.hairType === 'wavy'  ? 'A definite bend through the length — waves rather than curls.'
+                : 'Falling straight, with a smooth even surface.';
+
+  const flyaway = m.flyaway >= HAIR_FLYAWAY_HIGH ? 'Plenty of strands standing away from the mass — that is what frizz looks like to a camera.'
+                : m.flyaway >= 0.15 ? 'A few strands lifting away from the rest.'
+                : 'The outline reads clean, without much lift.';
+
+  return {
+    ...read,
+    gloss, surface, flyaway,
+    typeWord: HAIR_TYPE_WORD[read.hairType],
+    concernWord: HAIR_CONCERN_WORD[read.concern],
+    shinePct: Math.round(m.shine * 100),
+    flyawayPct: Math.round(m.flyaway * 100),
+    wavePct: Math.round(m.wave * 1000),
+    texturePct: Math.round(m.edge * 1000)
+  };
 }
 
 /* ---------- classification (pure function — testable without a canvas) ---------- */
@@ -1580,6 +1725,60 @@ function buildLocalHairPlan(answers){
   };
 }
 
+// Lines drawn straight from the measurements, so the photo-only plan still says
+// something specific to this head of hair rather than falling back to generic
+// advice when there are no questionnaire answers to lean on.
+function hairNotesFromPhoto(m){
+  const notes = [];
+  if (m.flyaway >= HAIR_FLYAWAY_HIGH)
+    notes.push('The photo shows a lot of strands standing away from the mass. That is the cuticle lifted and dry, so the fastest wins are a leave-in on damp hair and a satin pillowcase — not more washing.');
+  else if (m.flyaway >= 0.15)
+    notes.push('A few strands are lifting away. Usually friction rather than damage: a microfibre towel or a cotton t-shirt instead of a terry towel handles most of it.');
+
+  if (m.shine <= HAIR_SHINE_DULL)
+    notes.push('Very little light is coming back off your hair. A flat cuticle is what reflects, so a cool final rinse and one clarifying wash to strip buildup will do more here than any shine serum.');
+  else if (m.shine >= HAIR_SHINE_GOOD)
+    notes.push('Your hair is reflecting light well. Whatever you are doing for shine is working — the plan below is about keeping it, not fixing it.');
+
+  if (m.porosity >= 0.30)
+    notes.push('There is a lot of background showing through the hair in the photo. That reads as fine or sparse rather than damaged, and fine hair does better with light conditioner kept off the roots than with heavy masks.');
+
+  if (m.edge >= HAIR_EDGE_ROUGH)
+    notes.push('The strand-level texture is high. On curly and coily hair that is simply the curl pattern; on straight hair it usually means a roughened surface, and either way it is a signal to be gentler when it is wet.');
+
+  if (m.depth <= 0.30)
+    notes.push('Dark hair shows every highlight and every stray strand, so both the shine and the flyaway numbers above are read on the harsher end for you.');
+
+  return notes;
+}
+
+// The photo-only route: no questions at all. The measurements pick the hair type
+// and the concern, and the plan is built from those. What a camera cannot see —
+// how your scalp feels, how often you wash, what heat you use — is left out
+// rather than guessed at, and the plan says so.
+function buildPhotoHairPlan(m, overrides){
+  const read = hairFromPhoto(m);
+  const hairType = overrides?.hairType || read.hairType;
+  const concern = overrides?.concern || read.concern;
+  const plan = buildLocalHairPlan({ hairType, concern });
+  const corrected = hairType !== read.hairType || concern !== read.concern;
+  const lead = corrected
+    ? `Your correction: ${HAIR_TYPE_WORD[hairType]} hair, working on ${HAIR_CONCERN_WORD[concern] || concern}. `
+    : `Read from your photo: ${HAIR_TYPE_WORD[hairType]} hair, and the thing most worth working on is ${HAIR_CONCERN_WORD[concern]}. `;
+  return {
+    ...plan,
+    summary: lead + plan.summary.replace(/^For [^:]+: /, ''),
+    // Corrections come from the person, so photo-derived notes no longer apply
+    // to what they told us — only to what was actually measured.
+    lifestyle: hairNotesFromPhoto(m),
+    fromPhoto: true,
+    corrected,
+    hairType,
+    concern,
+    confidence: read.confidence
+  };
+}
+
 /* ---------- natural care guide: optional AI plan ---------- */
 
 async function fetchRemotePlan(topic, answers, skinType){
@@ -1851,15 +2050,19 @@ function renderResults(r){
     ${r.hair ? `
     <div class="sec">
       <p class="sec-title">Your hair, from the same photo</p>
+      <h2 class="hero-type" style="font-size:1.7rem"><em>${escapeHtml(r.hair.typeWord)}</em></h2>
+      <p class="hero-sum">Most worth working on: ${escapeHtml(r.hair.concernWord)}.${r.hair.confidence === 'borderline' ? ' This one sits close to a boundary — if it reads wrong to you, change it in one tap below.' : ''}</p>
       <div class="stats">
         <div class="stat"><div class="stat-val">${r.hair.shinePct}%</div><div class="stat-lab">of your hair caught the light</div></div>
-        <div class="stat"><div class="stat-val">${r.hair.texturePct}</div><div class="stat-lab">surface texture index</div></div>
+        <div class="stat"><div class="stat-val">${r.hair.flyawayPct}%</div><div class="stat-lab">strands standing away</div></div>
       </div>
       <ul class="bullets" style="margin-top:14px">
-        <li>${escapeHtml(r.hair.gloss)}</li>
         <li>${escapeHtml(r.hair.surface)}</li>
+        <li>${escapeHtml(r.hair.gloss)}</li>
+        <li>${escapeHtml(r.hair.flyaway)}</li>
       </ul>
-      <p class="sec-note">A photo can show gloss and stray strands. It cannot tell a wave from a curl reliably, or how your scalp feels — the hair plan asks you those.</p>
+      <div class="row" style="margin-top:16px"><button class="btn btn-primary" id="hairPhotoPlanBtn">Build my hair plan from this photo</button></div>
+      <p class="sec-note">No questions — this comes straight off the photo. What a camera genuinely cannot see is hair fall and how your scalp feels, so the plan leaves those out instead of guessing; there's a link inside it if either is your real concern.</p>
     </div>` : ''}
 
     <div class="sec">
@@ -1886,7 +2089,7 @@ function renderResults(r){
       <button class="btn btn-primary" id="guideBtn">Build my face plan</button>
     </div>
     <div class="row"><button class="btn btn-ghost" id="startOverBtn">Start over</button></div>
-    <button class="linkbtn" id="hairFromResults">Get a hair care plan too →</button>
+    <button class="linkbtn" id="hairFromResults">${r.hair ? 'Prefer to answer questions about your hair? →' : 'Get a hair care plan too →'}</button>
     <button class="linkbtn" id="chatFromResults">Ask a question about your read →</button>
   `;
 
@@ -1899,6 +2102,8 @@ function renderResults(r){
 
   document.getElementById('guideBtn').addEventListener('click', () => startGuide('skin', r.skinType));
   document.getElementById('hairFromResults').addEventListener('click', () => startGuide('hair', r.skinType));
+  const hairPhotoBtn = document.getElementById('hairPhotoPlanBtn');
+  if (hairPhotoBtn) hairPhotoBtn.addEventListener('click', startPhotoHairPlan);
   document.getElementById('chatFromResults').addEventListener('click', openChat);
 
   document.getElementById('startOverBtn').addEventListener('click', () => {
@@ -1934,6 +2139,17 @@ function startGuide(topic, skinType){
   hide(els.captureCard); hide(els.resultsCard); hide(els.chatCard);
   show(els.guideCard);
   renderQuestion();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+// The photo-only hair route: straight from the measurements to the plan, with
+// no questionnaire in between.
+function startPhotoHairPlan(overrides){
+  if (!lastHairMetrics) return;
+  guideState = { topic: 'hair', step: 0, answers: {}, seeded: {}, skinType: guideState.skinType };
+  hide(els.captureCard); hide(els.resultsCard); hide(els.chatCard);
+  show(els.guideCard);
+  renderPlan(buildPhotoHairPlan(lastHairMetrics, overrides), false);
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
@@ -1995,14 +2211,30 @@ async function buildPlan(){
 
 function renderPlan(plan, fromAI){
   const isHair = guideState.topic === 'hair';
-  const source = fromAI
-    ? 'Written for you by Claude, from your answers — your photo was never sent.'
-    : 'Built on your device from your answers — nothing was sent anywhere.';
+  const source = plan.fromPhoto
+    ? 'Read off your photo on this device — no questions asked, and the photo went nowhere.'
+    : fromAI
+      ? 'Written for you by Claude, from your answers — your photo was never sent.'
+      : 'Built on your device from your answers — nothing was sent anywhere.';
 
   els.guideCard.innerHTML = `
     <p class="sec-title">${isHair ? 'Your hair plan' : 'Your face plan'}</p>
     <p class="plan-src">${escapeHtml(source)}</p>
     <p class="plan-lede">${escapeHtml(plan.summary)}</p>
+
+    ${plan.fromPhoto ? `
+    <div class="sec">
+      <p class="sec-title">Change it in one tap</p>
+      <p class="plan-lede" style="font-size:0.95rem">A camera reads the outside of your hair. It cannot see how your scalp feels or whether more is coming out than usual — and it can be wrong about the rest. Correct either line and the plan rebuilds straight away.</p>
+      <p class="q-hint" style="margin-bottom:8px">Hair type</p>
+      <div class="chips">${['straight','wavy','curly','coily'].map(t =>
+        `<button class="starter${t === plan.hairType ? ' on' : ''}" data-hairtype="${t}">${escapeHtml(HAIR_TYPE_WORD[t])}</button>`).join('')}</div>
+      <p class="q-hint" style="margin:14px 0 8px">What actually bothers you</p>
+      <div class="chips">${[['frizz','Frizz'],['dry','Dry ends'],['dull','Dull, no shine'],['fall','More fall than usual'],['scalp','Scalp or flaking']].map(([v, label]) =>
+        `<button class="starter${v === plan.concern ? ' on' : ''}" data-concern="${v}">${escapeHtml(label)}</button>`).join('')}</div>
+      <p class="sec-note">The last two are the ones no photo can show. Pick either and the plan switches to it.</p>
+      <div class="row" style="margin-top:14px"><button class="btn btn-ghost" id="refineHairBtn">Or answer five questions</button></div>
+    </div>` : ''}
 
     ${Array.isArray(plan.causes) && plan.causes.length ? `
     <div class="sec">
@@ -2101,8 +2333,19 @@ function renderPlan(plan, fromAI){
     </div>
   `;
 
+  const refineBtn = document.getElementById('refineHairBtn');
+  if (refineBtn) refineBtn.addEventListener('click', () => startGuide('hair', guideState.skinType));
+
+  els.guideCard.querySelectorAll('[data-hairtype]').forEach(b => b.addEventListener('click', () =>
+    startPhotoHairPlan({ hairType: b.dataset.hairtype, concern: plan.concern })));
+  els.guideCard.querySelectorAll('[data-concern]').forEach(b => b.addEventListener('click', () =>
+    startPhotoHairPlan({ hairType: plan.hairType, concern: b.dataset.concern })));
+
   document.getElementById('leaveGuideBtn').addEventListener('click', leaveGuide);
-  document.getElementById('redoGuide').addEventListener('click', () => startGuide(guideState.topic, guideState.skinType));
+  document.getElementById('redoGuide').addEventListener('click', () => {
+    if (plan.fromPhoto && lastHairMetrics) startPhotoHairPlan();
+    else startGuide(guideState.topic, guideState.skinType);
+  });
 }
 
 /* ---------- chat ---------- */
