@@ -68,6 +68,14 @@ dressed up as AI; with no key it asks for one and says exactly why.
 It is held in `sessionStorage` for that browser tab only, sent to Groq and
 nowhere else, and cleared when the tab closes or you hit **Forget key**.
 
+On a phone, typing 56 characters is miserable, so the page also reads the key
+from the URL fragment — open `https://your-app/#key=gsk_...` once and the chat
+is unlocked. A fragment never leaves the browser (it is not sent to any server,
+and never appears in server logs), and the page wipes it from the address bar
+the moment it reads it, so it can't be shoulder-surfed or caught in a
+screenshot. Bookmark that link and it keeps working; send that link to someone
+and you have handed them your key.
+
 > **Never commit a Groq key.** Unlike the Supabase anon key, it is a real secret.
 > This repo is public, and bots scrape public repos for exactly this pattern —
 > a committed key gets abused or auto-revoked quickly. That is why each person

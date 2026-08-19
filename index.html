@@ -2133,6 +2133,23 @@ function setUserKey(k){
   try{ k ? sessionStorage.setItem(KEY_STORE, k) : sessionStorage.removeItem(KEY_STORE); }catch{}
 }
 
+/* Typing a 56-character key on a phone keyboard is miserable, so the page also
+   accepts it from the URL fragment: open …/#key=gsk_xxx once and the chat is
+   unlocked. A fragment is never sent to any server — it stays in the browser —
+   and it is wiped from the address bar the moment it is read, so it cannot be
+   shoulder-surfed or copied out of a shared screenshot. Bookmark that link and
+   it works every time; share it and you have shared your key, same as pasting
+   it anywhere else. */
+function adoptKeyFromUrl(){
+  const hash = location.hash || '';
+  const match = hash.match(/(?:^#|[#&])key=([^&]+)/);
+  if (!match) return;
+  const key = decodeURIComponent(match[1]).trim();
+  if (key) setUserKey(key);
+  history.replaceState(null, '', location.pathname + location.search);
+}
+adoptKeyFromUrl();
+
 const CHAT_SYSTEM = `You are a warm, practical skincare and haircare assistant in a cosmetic app used in India. You are talking with someone one-to-one.
 
 Hard rules that override anything the person asks for:
@@ -2327,8 +2344,9 @@ function offlinePanel(reason, detail){
     </div>`;
   }
   return `<div class="chat-offline">
-    <p><strong>The chat needs a key to answer.</strong> Everything else in this app — the photo read, both care plans, the styling tips — runs on your device, but a conversation needs a real model behind it, so rather than invent replies it asks you first.</p>
+    <p><strong>The chat needs a key to answer.</strong> Everything else in this app — the photo read, both plans, the causes, the products, the styling — runs on your device, but a conversation needs a real model behind it, so rather than invent replies it asks you first.</p>
     <p>Groq's free tier covers this. Get a key at <strong>console.groq.com/keys</strong> and paste it below. It is kept in this browser tab only, sent to Groq and nowhere else, and never saved to the project.</p>
+    <p class="sec-note" style="margin-top:10px">On a phone, adding <code>#key=gsk_…</code> to the end of this page's address does the same thing without typing it out — the key is taken out of the address bar straight away, and bookmarking that link keeps it working.</p>
     <form class="chat-form" id="keyForm" style="margin-top:14px">
       <input class="chat-input" id="keyInput" type="password" placeholder="gsk_…" autocomplete="off" spellcheck="false" style="min-height:auto">
       <button class="btn btn-primary chat-send" type="submit">Save</button>
