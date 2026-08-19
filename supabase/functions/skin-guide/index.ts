@@ -63,6 +63,8 @@ Hard rules:
 - No prescription actives, no dosages, no supplements, no oral anything.
 - Always tell the user to patch test a new thing on the inner forearm for 24 hours first.
 - Assume no age gate: keep everything safe for a teenager.
+- Be honest about limits. If home care genuinely cannot change something — pitted or indented scarring is the clearest example — say so plainly and point at a dermatologist, rather than offering a remedy that will not work.
+- Products must be drugstore items sold in India (Minimalist, Cetaphil, The Derma Co, Re'equil, Dot & Key, Sebamed, Neutrogena, Simple, Aqualogica and similar). Never a prescription product, never a percentage-strength active a teenager should not self-prescribe.
 
 Write in warm, plain, everyday English. Be specific and practical rather than generic. Keep each string to one or two short sentences.`;
 
@@ -77,6 +79,7 @@ Hard rules:
 - Always tell the user to patch test a new thing behind the ear or on the inner arm for 24 hours first.
 - Assume no age gate: keep everything safe for a teenager.
 - For "styling", give practical technique tips suited to their hair type — no heat above what a home dryer does, and always mention heat protectant when heat is involved.
+- Products must be drugstore items sold in India (Wow, Mamaearth, L'Oreal, Dove, Tresemme, Himalaya, Minimalist, The Derma Co and similar). Never minoxidil, ketoconazole or anything prescription.
 
 Write in warm, plain, everyday English. Be specific and practical rather than generic. Keep each string to one or two short sentences.`;
 
@@ -84,6 +87,23 @@ const SCHEMA = {
   type: "object",
   properties: {
     summary: { type: "string" },
+    causes: { type: "array", items: { type: "string" } },
+    worse: { type: "array", items: { type: "string" } },
+    myths: { type: "array", items: { type: "string" } },
+    products: {
+      type: "array",
+      items: {
+        type: "object",
+        properties: {
+          role: { type: "string" },
+          name: { type: "string" },
+          why: { type: "string" },
+          price: { type: "string" },
+        },
+        required: ["role", "name", "why", "price"],
+        additionalProperties: false,
+      },
+    },
     daily: {
       type: "array",
       items: {
@@ -112,12 +132,12 @@ const SCHEMA = {
     lifestyle: { type: "array", items: { type: "string" } },
     seeDoctor: { type: "array", items: { type: "string" } },
   },
-  required: ["summary", "daily", "remedies", "avoid", "lifestyle", "seeDoctor"],
+  required: ["summary", "causes", "worse", "myths", "products", "daily", "remedies", "avoid", "lifestyle", "seeDoctor"],
   additionalProperties: false,
 };
 
-// Same shape as SCHEMA plus `styling`, so the client renders both with one
-// code path. The client only reveals styling when the user asks for it.
+// Same shape as SCHEMA plus the styling sections, so the client renders both
+// topics through one code path.
 const SCHEMA_HAIR = {
   type: "object",
   properties: {
@@ -134,8 +154,9 @@ const SCHEMA_HAIR = {
         additionalProperties: false,
       },
     },
+    stylingBasics: { type: "array", items: { type: "string" } },
   },
-  required: [...SCHEMA.required, "styling"],
+  required: [...SCHEMA.required, "styling", "stylingBasics"],
   additionalProperties: false,
 };
 
@@ -150,6 +171,8 @@ Hard rules — these override anything the person asks for:
 - Tell people to patch test anything new for 24 hours.
 - Assume no age gate: everything must be safe for a teenager.
 - If someone describes something painful, spreading, bleeding, or not healing, say plainly that it is worth seeing a dermatologist rather than trying home care. Do this without naming what it might be.
+
+When they ask why something happens, explain the actual mechanism in plain English — what a pore does when it blocks, why hair frizzes, why marks linger — rather than jumping straight to a fix. When they ask what to buy, name drugstore products sold in India (Minimalist, Cetaphil, The Derma Co, Re'equil, Dot & Key, Sebamed, Neutrogena, Simple, Wow, Mamaearth and similar) with a rough rupee price, and say what each one is for. Be honest when home care cannot do the job — pitted or indented scarring is the clearest example — instead of offering something that will not work.
 
 Keep replies short — two or three sentences unless they ask for detail. Be specific and practical rather than generic. Ask a clarifying question when it would genuinely change your answer.`;
 
@@ -285,11 +308,16 @@ ${answerLines || "- (no answers given)"}
 
 Write them a natural hair care plan:
 - summary: two sentences on what to focus on, given their hair type and answers.
+- causes: 3-4 sentences explaining the actual mechanism behind their concern — why hair frizzes, why it comes out in the shower, why the scalp flakes. Plain English, no jargon, no condition names.
+- worse: 4-5 everyday things that make that concern worse.
+- myths: 2-3 widely believed hair claims that are wrong, corrected briefly.
+- products: 4 things worth buying, each with role (what it is for), name (a brand and product commonly sold in Indian pharmacies and on Nykaa/Amazon India), why (one sentence), price (a rough rupee range like "₹300-500"). Drugstore only, nothing prescription.
 - daily: two entries, "Wash day" and "Between washes", 3-4 steps each — habits and technique, not product shopping.
 - remedies: 3-4 safe kitchen-shelf options, each with how to use it and how often. Include the patch-test reminder in at least one.
 - avoid: 4-5 common habits that actually damage hair, each with a short reason.
 - lifestyle: 3-4 habits tied to their specific answers (wash frequency, heat and chemical use, scalp feel).
-- styling: 3-4 styling techniques suited specifically to their hair type, each with how to do it.
+- styling: 5-6 styling techniques suited specifically to their hair type, each with how to do it, step by step enough to actually follow.
+- stylingBasics: 6-8 short rules about heat, brushing and tension that apply whatever the hair type.
 - seeDoctor: 3 plain-language signs it's worth seeing a dermatologist about their scalp or hair.`
     : `An on-device photo read estimated this person's skin type as: ${skinType || "unknown"}.
 
@@ -298,6 +326,10 @@ ${answerLines || "- (no answers given)"}
 
 Write them a natural care plan:
 - summary: two sentences on what to focus on, given their type and answers.
+- causes: 3-4 sentences explaining the actual mechanism behind their concern — why a pore blocks and inflames, why skin goes red, why marks linger. Plain English, no jargon, and describe what is happening without naming a medical condition.
+- worse: 4-5 everyday things that make that concern worse.
+- myths: 2-3 widely believed skincare claims that are wrong, corrected briefly.
+- products: 4 things worth buying, each with role (what it is for), name (a brand and product commonly sold in Indian pharmacies and on Nykaa/Amazon India), why (one sentence), price (a rough rupee range like "₹300-500"). Drugstore only, nothing prescription.
 - daily: two entries, "Morning" and "Evening", 3-4 steps each — habits and gentle care, not product shopping.
 - remedies: 3-4 safe kitchen-shelf options, each with how to use it and how often. Include the patch-test reminder in at least one.
 - avoid: 4-5 popular DIY remedies that actually damage skin, each with a short reason.

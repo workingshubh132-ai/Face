@@ -12,17 +12,28 @@ The whole app is `index.html` — no build step, no dependencies to install.
    from the pixels and compared against the face's own average.
 3. Results: skin type, a shine-by-region chart from the actual measurements,
    routine, and ingredients with brand names common in Indian pharmacies.
-4. **Natural care plan** — a short questionnaire produces habit-level guidance,
-   safe kitchen-shelf remedies, and an explicit list of popular DIY remedies to
-   avoid (lemon juice, baking soda, toothpaste and friends cause real damage).
-5. **Hair care plan** — its own questionnaire (hair type, scalp, concern, wash
-   frequency, heat use) with wash-day and between-wash routines, remedies, and a
-   damaging-habits list. Reachable without taking a photo, since hair guidance
-   needs no image. **Styling tips are gated behind a button** and only appear
-   when asked for.
+4. **Face plan** — pick what's bothering you (spots, large pores or pitted
+   marks, redness, dark marks, oil, dryness) and the plan opens with **why it
+   happens**: what a pore actually does when it blocks, why skin flushes, why
+   a mark outlives the spot that caused it. Then what makes it worse, the myths
+   worth dropping, a morning/evening rhythm, **what to buy** — four named
+   drugstore products with rough rupee prices — kitchen-shelf remedies, and the
+   DIY list to avoid (lemon juice, baking soda, toothpaste and friends cause
+   real damage).
+5. **Hair plan** — its own questionnaire (hair type, scalp, concern, wash
+   frequency, heat use). Same shape: causes, triggers, myths, wash-day and
+   between-wash routines, products, remedies, damaging habits — plus **six
+   styling techniques matched to your hair type** and eight heat, brushing and
+   tension rules that hold whatever your hair does. Reachable without taking a
+   photo, since hair guidance needs no image.
 
 Cosmetic guidance only. Neither plan names a medical condition, and neither
-claims to treat, cure, or regrow anything.
+claims to treat, cure, or regrow anything. Where home care genuinely cannot fix
+something — pitted scarring is the clear case — the plan says so and points at a
+dermatologist instead of selling you a cream.
+
+Product suggestions are exactly that: no affiliate links, no tracking, nothing
+recorded about what you picked.
 
 ## Run it on Vercel (real HTTPS URL, works on any device)
 
@@ -71,10 +82,10 @@ Groq retires model ids periodically. If the chat reports a model error, pick a
 current one from [console.groq.com/docs/models](https://console.groq.com/docs/models)
 and change `groqModel` in `index.html` (or the `GROQ_MODEL` secret).
 
-Everything else — the photo read, both care plans, the styling tips — runs
-entirely in the browser and needs no key at all.
+Everything else — the photo read, both plans, the causes, the product lists and
+the styling — runs entirely in the browser and needs no key at all.
 
-## The natural care plan works two ways
+## The plans work two ways
 
 **By default it runs entirely on your device.** The questionnaire answers feed a
 rule-based plan builder in `index.html`. No network call, no cost, works offline,
@@ -87,9 +98,10 @@ which forwards a bounded conversation history plus what the photo measured). It
 handles both plan topics — the client sends `topic: "skin"`
 or `topic: "hair"` and the function switches system prompt and output schema
 accordingly. The app tries it first and silently falls back to the on-device plan
-if it isn't deployed, times out, errors, or returns something malformed (for hair
-that includes a response missing the styling section) — so deploying it is a pure
-upgrade with no risk of breaking the app.
+if it isn't deployed, times out, errors, or returns something thinner than the
+local plan — a response missing the causes, the products, or (for hair) the
+styling section counts as malformed, so the AI path can only ever be an upgrade,
+never a downgrade.
 
 To turn it on (needs an Anthropic API key with credit):
 
@@ -101,7 +113,7 @@ supabase functions deploy skin-guide --no-verify-jwt
 Cost: the function defaults to `claude-opus-5`. For a task this small,
 `claude-haiku-4-5` is roughly a fifth the price per call and plenty capable —
 switch with `supabase secrets set ANTHROPIC_MODEL=claude-haiku-4-5`, no code
-change. Either way it only runs when someone taps "Build my natural care plan",
+change. Either way it only runs when someone taps "Build my face plan",
 not on every skin read.
 
 Rate limiting is built in (5 requests per minute per IP). It's in-memory, so it
@@ -129,7 +141,7 @@ you later add any, enable RLS on them before shipping.
   a Groq key you paste yourself, kept in `sessionStorage` so a refresh doesn't
   lose it, and cleared when the tab closes or you hit "Forget key".
 - The only outbound requests are the one-time MediaPipe model download from a CDN
-  and, if you deploy it, the natural-care-plan call described above.
+  and, if you deploy it, the plan-writing call described above.
 
 ## Phone + laptop notes
 
