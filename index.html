@@ -504,6 +504,68 @@ function boxFromLandmarks(points, w, h){
   return [minX * w, minY * h, maxX * w, maxY * h];
 }
 
+/* ---------- face shape, measured from the landmarks ---------- */
+
+// Canonical MediaPipe FaceMesh indices. A stylist cuts to the shape of a face,
+// so these are the four measurements that decide it: how long the face is, and
+// how wide it is at the forehead, the cheekbones and the jaw.
+const FM = {
+  top: 10, chin: 152,
+  cheekL: 234, cheekR: 454,
+  jawL: 172, jawR: 397,
+  browL: 54, browR: 284,
+  jawTipL: 149, jawTipR: 378
+};
+
+// Landmarks come back normalised per axis — x against the width, y against the
+// height. On a portrait photo those are different divisors, so measuring
+// distance on the raw values stretches every vertical measurement by the aspect
+// ratio and would report a 3:4 photo of a round face as a long one. Scaling
+// back into pixels first is what makes the ratios mean anything.
+const distPx = (a, b, w, h) => Math.hypot((a.x - b.x) * w, (a.y - b.y) * h);
+
+// Ratios, not pixels: dividing every width by the face length makes the result
+// independent of how close the camera was, which is the only way a single photo
+// can say anything about proportion at all.
+function readFaceShape(points, w, h){
+  if (!points || points.length < 468) return null;
+  if (!(w > 0) || !(h > 0)) return null;
+  const P = i => points[i];
+  const dist = (a, b) => distPx(a, b, w, h);
+
+  const length = dist(P(FM.top), P(FM.chin));
+  if (length < 1e-6) return null;
+  const cheek = dist(P(FM.cheekL), P(FM.cheekR));
+  const jaw = dist(P(FM.jawL), P(FM.jawR));
+  const brow = dist(P(FM.browL), P(FM.browR));
+  if (cheek < 1e-6) return null;
+
+  const lengthRatio = length / cheek;   // >1.5 reads as a long face
+  const jawRatio = jaw / cheek;         // near 1 reads as a square jaw
+  const browRatio = brow / cheek;       // >1 means the forehead is the widest part
+
+  // How sharply the jaw turns the corner: a square jaw keeps its width almost
+  // all the way to the chin, a tapered one narrows fast.
+  const jawTip = dist(P(FM.jawTipL), P(FM.jawTipR));
+  const taper = jaw > 1e-6 ? jawTip / jaw : 1;
+
+  const shape =
+      lengthRatio >= 1.55                          ? 'long'
+    : browRatio >= 1.02 && jawRatio <= 0.86        ? 'heart'
+    : jawRatio <= 0.80 && browRatio <= 0.95        ? 'diamond'
+    : jawRatio >= 0.90 && taper >= 0.62            ? 'square'
+    : lengthRatio <= 1.28                          ? 'round'
+    : 'oval';
+
+  return {
+    shape,
+    lengthRatio: Math.round(lengthRatio * 100) / 100,
+    jawRatio: Math.round(jawRatio * 100) / 100,
+    browRatio: Math.round(browRatio * 100) / 100,
+    taper: Math.round(taper * 100) / 100
+  };
+}
+
 function approximateFaceBox(w, h){
   return [0.16 * w, 0.05 * h, 0.84 * w, 0.95 * h];
 }
@@ -515,7 +577,14 @@ async function detectFaceBox(canvas){
   try{
     const result = landmarker.detect(canvas);
     if (!result?.faceLandmarks?.length) return { box: null, noFace: true };
-    return { box: boxFromLandmarks(result.faceLandmarks[0], canvas.width, canvas.height), approximate: false };
+    const points = result.faceLandmarks[0];
+    return {
+      box: boxFromLandmarks(points, canvas.width, canvas.height),
+      // Face shape needs the landmarks themselves, not the box around them.
+      // The approximate fallback has none, so it simply has no shape to offer.
+      faceShape: readFaceShape(points, canvas.width, canvas.height),
+      approximate: false
+    };
   }catch(err){
     console.warn('Detection failed at runtime — using an approximate frame instead.', err);
     return { box: approximateFaceBox(canvas.width, canvas.height), approximate: true };
@@ -1458,6 +1527,10 @@ function buildLocalPlan(answers, skinType){
       { time: 'Evening', steps: daily.Evening }
     ],
     products: SKIN_PRODUCTS[concern] || SKIN_PRODUCTS.pimples,
+    order: LAYER_ORDER,
+    mixWarnings: MIX_WARNINGS,
+    ramp: rampSchedule(SKIN_PRODUCTS[concern] || SKIN_PRODUCTS.pimples),
+    expect: EXPECT_TIMELINE[concern] || EXPECT_TIMELINE.pimples,
     remedies: PLAN_REMEDIES[concern] || PLAN_REMEDIES.pimples,
     avoid: PLAN_AVOID,
     lifestyle,
@@ -1588,6 +1661,288 @@ const HAIR_STYLING = {
 
 // Heat, tools and tension rules apply to every hair type, so they live outside
 // the per-type lists rather than being repeated four times.
+/* ---------- skincare advisor: order, conflicts, ramp-up, timeline ---------- */
+
+// The single most common reason a routine does not work is not the products —
+// it is the order they go on in and how fast they were all started at once.
+const LAYER_ORDER = {
+  Morning: [
+    { step: 'Cleanser', why: 'Only if your skin feels like it needs it. Plenty of people do better rinsing with water in the morning and saving cleanser for the evening.' },
+    { step: 'Watery treatment', why: 'Anything thin and liquid goes before anything thick. A thin layer cannot get through a cream, but a cream goes on over anything.' },
+    { step: 'Moisturiser', why: 'Seals in what is underneath. Skipping it makes actives sting and pushes oily skin to make more oil.' },
+    { step: 'Sunscreen', why: 'Always last in the morning, always a proper amount — two fingers for the face and neck. This is the step that decides whether marks fade or darken.' }
+  ],
+  Evening: [
+    { step: 'Cleanser', why: 'Twice if you wore sunscreen or makeup: an oil or balm first to break it down, then your normal cleanser.' },
+    { step: 'Treatment', why: 'Whatever you are actually treating with — the acid, the niacinamide, the spot product. On the areas that need it, not the whole face.' },
+    { step: 'Moisturiser', why: 'Over the top, every night without exception. This is what keeps the treatment tolerable.' },
+    { step: 'Occlusive if needed', why: 'A thin layer of something heavier on dry patches only, and only if your skin is genuinely dry.' }
+  ]
+};
+
+// OTC only, and framed as "not on the same night" rather than as danger, because
+// that is the truthful version — these combinations irritate, they do not injure.
+const MIX_WARNINGS = [
+  { pair: 'Two exfoliants on the same night', why: 'A salicylic acid cleanser plus a glycolic toner plus a scrub is three exfoliants. Pick one, and not daily. Over-exfoliated skin looks shiny and feels tight, and people usually read that as "working".' },
+  { pair: 'Vitamin C and benzoyl peroxide together', why: 'They cancel each other out. Use vitamin C in the morning and benzoyl peroxide at night if you want both.' },
+  { pair: 'A new active and a face scrub in the same week', why: 'Start one thing at a time. If your skin reacts, you want to know which one it was.' },
+  { pair: 'Acids and hot water', why: 'Hot water on freshly exfoliated skin is what turns mild tingling into a burn. Lukewarm, always.' },
+  { pair: 'Strong actives and a day in the sun', why: 'Exfoliated skin burns faster. If you are going to be out all day, that is a night to skip the acid.' }
+];
+
+// Everything at once is why routines fail: the skin reacts, and nobody knows to
+// what. This is the same schedule a good pharmacist would give you.
+function rampSchedule(products){
+  const named = (products || []).filter(p => p.role !== 'Habit');
+  const cleanser = named.find(p => /cleanser|wash|shampoo/i.test(p.role));
+  const moist = named.find(p => /moistur|conditioner|cream/i.test(p.role));
+  const spf = named.find(p => /sunscreen/i.test(p.role));
+  // Whatever is left over is the thing being introduced. Matching on a list of
+  // role names missed products whose role was simply called something else, and
+  // silently dropped the week that matters most.
+  const treat = named.find(p => p !== cleanser && p !== moist && p !== spf);
+
+  // A cleanser carrying an active is an active, whatever the shelf calls it.
+  // Starting it in week one and adding a second active in week two is two
+  // actives in a fortnight, which is exactly what this schedule exists to stop.
+  const activeCleanser = cleanser && /acid|benzoyl|peroxide|retino|clarif/i.test(cleanser.name);
+  const week1Cleanser = activeCleanser
+    ? `a plain gentle cleanser you already own (${cleanser.name} waits until week 2)`
+    : (cleanser ? cleanser.name : 'a gentle cleanser');
+
+  const weeks = [];
+  weeks.push({
+    week: 'Week 1',
+    doing: `Only the basics: ${week1Cleanser}${moist ? ' and ' + moist.name : ''}${spf ? ', plus ' + spf.name + ' every morning' : ''}.`,
+    why: 'One week of nothing but the boring steps tells you what your skin is like without anything acting on it. Most people have never seen that.'
+  });
+  const introducing = activeCleanser ? cleanser : treat;
+  if (introducing) weeks.push({
+    week: 'Week 2',
+    doing: `Add ${introducing.name}, two nights only — say Tuesday and Saturday.`,
+    why: 'Two nights is enough to see how it suits you and few enough that a reaction is easy to reverse.'
+  });
+  if (activeCleanser && treat) weeks.push({
+    week: 'Week 3',
+    doing: `If week 2 was comfortable, add ${treat.name} on the nights you are not using ${cleanser.name}.`,
+    why: 'Alternating nights rather than stacking them is how you use two actives without the irritation that comes from using both at once.'
+  });
+  else weeks.push({
+    week: 'Week 3',
+    doing: introducing
+      ? 'If week 2 was comfortable, go to three or four nights. If it stung or flaked, stay at two.'
+      : 'Keep the basics going and add nothing. Consistency is doing the work here.',
+    why: 'Going up slowly is the difference between a routine that lasts and one abandoned in a month.'
+  });
+  weeks.push({
+    week: 'Weeks 4-8',
+    doing: 'Change nothing else. Take a photo in the same light on the same day each week.',
+    why: 'Skin turns over in roughly four to six weeks, so anything you judge before then you are judging too early. Photos beat memory, which is unreliable about your own face.'
+  });
+  return weeks;
+}
+
+// What normal actually looks like, so a temporary reaction is not mistaken for
+// failure and a real problem is not waited out.
+const EXPECT_TIMELINE = {
+  pimples: [
+    { when: 'First two weeks', what: 'Often no visible change, and sometimes slightly more spots as things already forming come to the surface. This is the stage most people quit at.' },
+    { when: 'Weeks 3-6', what: 'Fewer new spots. The ones that do appear settle faster and leave less behind.' },
+    { when: 'Weeks 6-12', what: 'The overall picture calms. Old marks are still fading — those are on their own slower clock.' },
+    { when: 'Stop and reconsider if', what: 'It stings constantly, your skin is peeling in sheets, or spots are getting worse after six full weeks.' }
+  ],
+  pores: [
+    { when: 'First two weeks', what: 'Blackheads clear more easily and the skin feels smoother. Pore size itself does not change, because it cannot.' },
+    { when: 'Weeks 3-8', what: 'Less visible congestion and a more even surface. This is the realistic ceiling for home care.' },
+    { when: 'Pitted marks', what: 'These do not respond to any of this, on any timeline. Only in-clinic treatment resurfaces them.' },
+    { when: 'Stop and reconsider if', what: 'You are scrubbing or squeezing to speed it up — both make the marks permanent rather than temporary.' }
+  ],
+  redness: [
+    { when: 'First week', what: 'Doing less usually shows up fast. Cutting the routine back often calms things within days.' },
+    { when: 'Weeks 2-6', what: 'Steadier colour, less reacting to weather and hot water.' },
+    { when: 'Weeks 6+', what: 'Whatever remains is your baseline, and gentleness is what maintains it.' },
+    { when: 'See someone if', what: 'It spreads, comes with bumps or stinging that will not settle, or flushes hard and stays.' }
+  ],
+  marks: [
+    { when: 'First month', what: 'Very little. Marks fade slowly and nothing at a pharmacy changes that.' },
+    { when: 'Months 2-4', what: 'Gradual lightening, entirely dependent on daily sunscreen. Skip that and this stalls completely.' },
+    { when: 'Months 4-12', what: 'Most post-spot marks fade substantially in this window if the sun is kept off them.' },
+    { when: 'Reconsider if', what: 'You are trying to speed it with lemon, bleaching creams or scrubs — all three commonly make marks darker.' }
+  ],
+  oil: [
+    { when: 'First two weeks', what: 'Often worse before better if you have been over-washing. The skin takes a fortnight to stop compensating.' },
+    { when: 'Weeks 3-6', what: 'Shine settles into a normal daily pattern rather than a mid-morning flood.' },
+    { when: 'Ongoing', what: 'Oil production is largely genetic and hormonal. The aim is managing it, not ending it.' },
+    { when: 'Reconsider if', what: 'You are washing more than twice a day or using anything that leaves the skin squeaky.' }
+  ],
+  dry: [
+    { when: 'First week', what: 'The fastest-improving concern of the lot. Cooler water and sealing damp skin show up within days.' },
+    { when: 'Weeks 2-4', what: 'Flaking stops, tightness after washing goes.' },
+    { when: 'Ongoing', what: 'Dryness comes back whenever the weather or the habits change. It is maintenance, not a cure.' },
+    { when: 'See someone if', what: 'It cracks, weeps, or itches enough to disturb sleep.' }
+  ]
+};
+
+/* ---------- personal stylist: what suits the face in the photo ---------- */
+
+// What a stylist is actually doing when they look at your face before cutting:
+// deciding what to lengthen, what to soften, and where to put width. None of
+// this is a rule about how anyone should look — it is what creates or breaks a
+// proportion, and it is yours to ignore.
+const FACE_SHAPE_STYLE = {
+  oval: {
+    name: 'Oval',
+    reading: 'Your face is a little longer than it is wide, and the jaw sits narrower than the cheekbones.',
+    goal: 'Proportions are already balanced, so styling is about keeping the shape visible rather than correcting anything.',
+    cuts: [
+      'Almost any length works — this is the shape most cuts are designed around.',
+      'Collarbone-length with long layers is the safest flattering default.',
+      'A curtain fringe opens the face without shortening it.',
+      'Blunt ends add weight if your hair is fine; heavy internal layers keep it moving if it is thick.'
+    ],
+    avoid: [
+      'Heavy straight-across fringes plus a lot of volume at the sides — together they can square off a shape that is not square.',
+      'Very tight scraped-back styles day after day, which pull at the hairline regardless of face shape.'
+    ],
+    parting: 'Centre or slightly off-centre both work. Change it now and then so the roots do not learn one direction.'
+  },
+  round: {
+    name: 'Round',
+    reading: 'Your face measures close to as wide as it is long, with a soft jawline rather than a sharp one.',
+    goal: 'Length and height read well here; width at the cheeks less so.',
+    cuts: [
+      'Anything that falls past the collarbone lengthens the line.',
+      'Layers starting below the chin rather than at the cheek keep volume away from the widest part.',
+      'A long side-swept fringe cuts a diagonal across the face, which reads as length.',
+      'Height at the crown — root lift, a soft quiff, a high bun — does more than any other single thing.'
+    ],
+    avoid: [
+      'Chin-length blunt bobs, which land width exactly where the face is already widest.',
+      'Heavy straight fringes cutting the face short, and big volume at ear level.'
+    ],
+    parting: 'A deep side parting adds an asymmetric line and reads longer than a centre parting.'
+  },
+  square: {
+    name: 'Square',
+    reading: 'Your jaw holds its width almost all the way to the chin, close to the width of your cheekbones.',
+    goal: 'A strong jaw is a feature. Softness around it is the choice, not a fix.',
+    cuts: [
+      'Soft layers and waves around the jaw take the hard edge off if you want that.',
+      'Long, blunt and straight leans into the strong line instead — both are good, pick your side.',
+      'Side-swept fringes break the horizontal of a straight brow-to-jaw line.',
+      'Length past the shoulders keeps the eye travelling down rather than across.'
+    ],
+    avoid: [
+      'A blunt bob ending exactly at the jaw, which doubles the line you already have.',
+      'Very short sides with square-cut edges, unless the sharpness is the point.'
+    ],
+    parting: 'Off-centre. A centre parting sits symmetrically over a symmetric jaw and can read severe.'
+  },
+  heart: {
+    name: 'Heart',
+    reading: 'Your forehead is the widest part of your face and the jaw tapers noticeably towards the chin.',
+    goal: 'Balance the narrow chin against the wider top, without flattening the top.',
+    cuts: [
+      'Volume below the chin — a lob, waves through the ends, a flick outward — fills the narrower half.',
+      'A side-swept or curtain fringe covers forehead width without a hard line.',
+      'Chin-to-collarbone lengths sit exactly where the balance is wanted.',
+      'Avoid stacking all your volume at the crown; it widens the already wider end.'
+    ],
+    avoid: [
+      'Very short, very cropped cuts with height on top and nothing at the sides.',
+      'Slicked-back styles that expose the full forehead width and remove all the softness.'
+    ],
+    parting: 'A side parting breaks the width across the forehead better than a centre one.'
+  },
+  diamond: {
+    name: 'Diamond',
+    reading: 'Your cheekbones are the widest point, with both the forehead and the jaw narrower.',
+    goal: 'Add a little at the forehead and the chin, keep it close at the cheekbone.',
+    cuts: [
+      'A fringe — curtain, wispy, or full — adds the forehead width the shape wants.',
+      'Chin-length or longer with volume at the ends fills out the jaw line.',
+      'Tucking hair behind the ears exposes the widest point; leaving it forward softens it.',
+      'Textured mid-lengths beat sleek flat mid-lengths here.'
+    ],
+    avoid: [
+      'Slicked-back styles with volume only at the cheekbone.',
+      'Very short blunt cuts at cheekbone height.'
+    ],
+    parting: 'Centre parting with a soft fringe, or a curtain parting that fills the temples.'
+  },
+  long: {
+    name: 'Long',
+    reading: 'Your face measures noticeably longer than it is wide.',
+    goal: 'Width and horizontal lines shorten the look; height and length extend it.',
+    cuts: [
+      'A blunt fringe is the single most effective change — it visually cuts the length in half.',
+      'Waves and curls through the mid-lengths add width where a long face wants it.',
+      'Shoulder-length or shorter reads better than very long and very straight.',
+      'Layers that start at the cheekbone put volume across rather than down.'
+    ],
+    avoid: [
+      'Long, flat, centre-parted hair with no layers, which extends the vertical line.',
+      'A lot of height at the crown.'
+    ],
+    parting: 'Centre or side both work, as long as the hair is not pulled flat to the skull.'
+  }
+};
+
+// Hair type changes how a cut behaves, so the shape advice above gets one line
+// of reality attached to it.
+const CUT_BY_TYPE = {
+  straight: 'On straight hair, cut lines show exactly as cut — blunt reads blunt, and layers show every step, so ask for them to be softened.',
+  wavy: 'On wavy hair, expect the cut to sit one to two inches shorter than it looks wet. Ask to be cut dry, or for the length to be left long.',
+  curly: 'On curly hair, ask for a dry cut curl by curl. A wet cut on curls is how people end up with a triangle shape.',
+  coily: 'On coily hair, shrinkage can be half the length or more, so agree the finished look rather than a number of inches. Cut on stretched or dry hair.'
+};
+
+/* ---------- personal stylist: styling for the day you are having ---------- */
+
+const OCCASION_LABELS = {
+  everyday: 'Everyday',
+  work: 'Work or college',
+  party: 'Wedding or party',
+  gym: 'Gym or sport',
+  humid: 'Humid or monsoon day',
+  daythree: 'Day three, no wash'
+};
+
+const OCCASION_STYLING = {
+  straight: {
+    everyday: { time: '5 min', steps: ['Rough dry the roots on medium, nozzle pointed down the length.','Flip your parting to the other side while damp for lift.','Pea-sized serum on the bottom third only.','Cool shot for ten seconds to set it.'] },
+    work: { time: '10 min', steps: ['Blow dry with a round brush, one section at a time, ending each pass with cool air.','Low ponytail or a half-up pinned slightly forward of where it sits naturally.','Smooth flyaways with a clean mascara wand and a touch of serum, not a whole handful.','If it goes flat by lunch, dry shampoo at the roots in the morning — before it is oily, not after.'] },
+    party: { time: '25 min', steps: ['Heat protectant, then a 1-inch tong: wrap sections away from your face, hold five seconds.','Let each curl cool in your palm before you drop it — that is what makes it hold.','Once all cool, brush through with fingers only for a soft wave rather than defined curls.','Flexible-hold hairspray from a distance. Close range makes it crunchy.','A low twisted bun with face-framing pieces left out is the ten-minute version.'] },
+    gym: { time: '2 min', steps: ['Braid it, or a low bun with a spiral tie — high tight ponytails plus sweat is where breakage starts.','Never leave it tied wet with sweat for hours; loosen and air it as soon as you finish.','A cotton headband soaks up sweat at the hairline so the roots stay cleaner.','Rinse the scalp with water after a heavy session even if you are not washing properly.'] },
+    humid: { time: '5 min', steps: ['Anti-humidity serum or a light silicone on damp hair, then dry fully — half-dry hair in humidity is what frizzes.','Sleek is easier to hold than volume on a humid day. Low bun, tight braid, or a slick ponytail.','Skip oil at the roots; humidity plus oil reads greasy within hours.','Carry a small spray of water and leave-in for a midday reset instead of adding more product.'] },
+    daythree: { time: '3 min', steps: ['Dry shampoo at the roots, wait two full minutes, then massage in — most people brush it out too early.','Change the parting to hide the flatness.','Low bun or half-up so the roots are not the main event.','A little serum through the ends to make it look intentional.'] }
+  },
+  wavy: {
+    everyday: { time: '5 min', steps: ['Scrunch a light gel or cream into soaking wet hair in fistfuls.','Plop into a cotton t-shirt for fifteen minutes.','Air dry without touching it. Every touch mid-dry is a frizz.','Scrunch out the gel cast once completely dry.'] },
+    work: { time: '12 min', steps: ['Same wet application, then diffuse on low heat and low speed, cupping upward.','Two clips at the roots at the parting while it dries for lift where waves go flat.','Cast break at the end.','Half-up clip keeps it off your face without flattening the wave.'] },
+    party: { time: '20 min', steps: ['Wash the night before — day-two waves hold shape better than fresh ones.','Refresh with water and leave-in, then scrunch.','Tong only the front pieces to match the natural wave pattern; leave the rest alone.','Flexible hairspray, then shake out at the roots with your fingertips.','A half-up with the crown pinned loosely reads dressed without fighting the texture.'] },
+    gym: { time: '2 min', steps: ['Loose braid or a pineapple on top of the head with a scrunchie.','Sweat at the scalp is fine; sweat dried into the lengths is what roughens waves.','Rinse and re-scrunch with water and a little leave-in afterwards rather than a full wash.','Satin scrunchie, not elastic, if you are tying it damp.'] },
+    humid: { time: '6 min', steps: ['More gel, not less. A firmer cast is what stops humidity getting into the hair.','Make sure it is completely dry before you break the cast — this is the whole game.','Wave clumps hold better than separated strands, so do not comb or finger-separate.','Anti-humidity spray over the top once styled.'] },
+    daythree: { time: '4 min', steps: ['Spray bottle: water with a squeeze of conditioner. Mist properly wet, not damp.','Scrunch upward, section by section.','Diffuse briefly at the roots if they have gone flat.','Dry shampoo only at the scalp, never through the wave.'] }
+  },
+  curly: {
+    everyday: { time: '8 min', steps: ['Leave-in on dripping hair, praying hands down the length.','Gel on top the same way, then scrunch upward.','Plop 20 minutes, then air dry or diffuse on low without moving the diffuser.','Break the cast with your palms once bone dry.'] },
+    work: { time: '15 min', steps: ['Same routine but diffuse fully so you are not leaving with wet hair — wet curls in a collar go frizzy.','Root clips at the parting for height.','A claw clip half-up keeps curls off your face without pulling the pattern out.','Refresh at midday with a spray bottle, not with more product.'] },
+    party: { time: '20 min', steps: ['Style the night before and pineapple it — day-two curls have more volume than fresh ones.','Refresh the front section only, since that is what people see.','Pin one side back with the curls left loose for a shape change without heat.','Light oil on your fingertips over the top surface for shine, not through the curl.','If you want it stretched, band it damp rather than heat-straightening it.'] },
+    gym: { time: '2 min', steps: ['High pineapple with a satin scrunchie, or a loose braid for longer sessions.','Do not tie it tight and do not tie it repeatedly in the same spot.','Rinse the scalp after, then re-wet and re-scrunch the lengths with leave-in.','Satin-lined cap for heavy sweat sessions keeps the curls from matting.'] },
+    humid: { time: '8 min', steps: ['Humidity is not the enemy for curls — dryness is. More leave-in, then a firm gel over it.','Full cast, fully dry, then break it. A half-dry cast in humidity is guaranteed frizz.','Do not touch it during the day; hands are what turn a curl into a halo.','An anti-humidity gel is worth having through monsoon specifically.'] },
+    daythree: { time: '5 min', steps: ['Section it, mist each section properly wet, add a little leave-in, scrunch.','Curls that have lost their pattern need water, not product — product on dry curls goes greasy.','Diffuse the roots for volume.','If a section will not revive, twist it and let it dry that way.'] }
+  },
+  coily: {
+    everyday: { time: '10 min', steps: ['Four to six sections, one at a time.','Water or a water-based leave-in first, then oil, then cream to seal.','Shingle or finger-coil the front sections if you want definition where it shows.','Satin bonnet the moment you are home.'] },
+    work: { time: '15 min', steps: ['A twist-out prepared the night before is the least effort in the morning.','Unravel with oiled fingers, from the bottom up, gently.','Fluff at the roots with a pick, not with your hands through the lengths.','A neat protective style is the low-maintenance week option — just not tight.'] },
+    party: { time: '30 min', steps: ['Twist or braid on damp hair the night before and let it dry completely.','Unravel slowly the next day for stretched definition with no heat at all.','Pick out the roots for height and shape.','Edge control at the hairline only if you want it, and gently — that hairline is where tension damage shows first.','A light oil sheen over the top for finish.'] },
+    gym: { time: '2 min', steps: ['Satin-lined cap or a loose high bun. Tight anything plus sweat is the combination to avoid.','Rinse or co-wash the scalp after heavy sweat rather than letting salt sit on it.','Re-moisturise the lengths after; sweat is drying, not conditioning.','Protective styles are genuinely useful during a heavy training block.'] },
+    humid: { time: '10 min', steps: ['Coily hair often looks its best in humidity — the moisture is doing you a favour.','Seal properly with oil so the moisture stays in rather than swelling and shrinking repeatedly.','Twist-outs hold shape in humidity better than wash-and-gos do.','Expect more shrinkage on a humid day and plan the style around it rather than fighting it.'] },
+    daythree: { time: '6 min', steps: ['Mist with water and leave-in, section by section.','Re-twist the front sections at night and unravel in the morning.','Pick at the roots for volume rather than combing through.','If it is matting at the back, that section needs detangling with conditioner, not more product.'] }
+  }
+};
+
 const HAIR_STYLING_BASICS = [
   'Heat protectant before any hot tool, every single time. Not optional and not the same as leave-in — check the bottle actually says heat protection.',
   'Lowest setting that works. Most people run a straightener at 200°C+ out of habit; fine hair straightens at 150°C and thick hair rarely needs past 180°C.',
@@ -1721,6 +2076,12 @@ function buildLocalHairPlan(answers){
     lifestyle,
     styling: HAIR_STYLING[type] || HAIR_STYLING.straight,
     stylingBasics: HAIR_STYLING_BASICS,
+    occasions: OCCASION_STYLING[type] || OCCASION_STYLING.straight,
+    ramp: rampSchedule(HAIR_PRODUCTS[concern] || HAIR_PRODUCTS.frizz),
+    // Only ever present when the landmarks actually resolved a shape. The
+    // approximate fallback box cannot produce one, and a guessed face shape
+    // would be worse than none.
+    faceShape: lastFaceShape ? { ...FACE_SHAPE_STYLE[lastFaceShape.shape], ...lastFaceShape, cutNote: CUT_BY_TYPE[type] } : null,
     seeDoctor: HAIR_SEE_DOCTOR
   };
 }
@@ -2129,6 +2490,7 @@ const TOPICS = {
 
 let guideState = { topic: 'skin', step: 0, answers: {}, skinType: 'Normal' };
 let lastHairMetrics = null;
+let lastFaceShape = null;
 let lastReading = null;
 
 function startGuide(topic, skinType){
@@ -2205,7 +2567,15 @@ async function buildPlan(){
 
   const remote = await fetchRemotePlan(guideState.topic, guideState.answers, guideState.skinType);
   const useRemote = planLooksValid(remote, guideState.topic);
-  const plan = useRemote ? remote : topic.build(guideState.answers, guideState.skinType);
+  const local = topic.build(guideState.answers, guideState.skinType);
+  // The layering order, the mixing warnings, the ramp-up, the occasion styling
+  // and the face-shape measurement are all deterministic — they come from your
+  // photo and from rules, not from a model's opinion. So they are always taken
+  // from the device, even when the prose came from elsewhere.
+  const plan = useRemote
+    ? { ...remote, order: local.order, mixWarnings: local.mixWarnings, ramp: local.ramp,
+        expect: local.expect, occasions: local.occasions, faceShape: local.faceShape }
+    : local;
   renderPlan(plan, useRemote);
 }
 
@@ -2265,6 +2635,29 @@ function renderPlan(plan, fromAI){
         </div>`).join('')}
     </div>
 
+    ${plan.order && !isHair ? `
+    <div class="sec">
+      <p class="sec-title">The order it goes on in</p>
+      ${Object.entries(plan.order).map(([time, steps]) => `
+        <div class="day-col">
+          <div class="day-head">${escapeHtml(time)}</div>
+          <ol class="cause-list" style="margin-top:10px">${steps.map(st =>
+            `<li><b style="color:var(--text)">${escapeHtml(st.step)}</b><br>${escapeHtml(st.why)}</li>`).join('')}</ol>
+        </div>`).join('')}
+      <p class="sec-note">Thin before thick, and sunscreen last in the morning. Getting the order wrong is the most common reason a routine full of good products does nothing.</p>
+    </div>` : ''}
+
+    ${Array.isArray(plan.mixWarnings) && plan.mixWarnings.length && !isHair ? `
+    <div class="sec">
+      <p class="sec-title">Don't put these together</p>
+      ${plan.mixWarnings.map(w => `
+        <div class="rem-card">
+          <div class="rem-name">${escapeHtml(w.pair)}</div>
+          <div class="rem-how">${escapeHtml(w.why)}</div>
+        </div>`).join('')}
+      <p class="sec-note">These irritate rather than injure. Nothing here is dangerous — it just wastes your money and your skin's patience.</p>
+    </div>` : ''}
+
     ${Array.isArray(plan.products) && plan.products.length ? `
     <div class="sec">
       <p class="sec-title">What to buy</p>
@@ -2278,6 +2671,29 @@ function renderPlan(plan, fromAI){
           <div class="prod-why">${escapeHtml(p.why)}</div>
         </div>`).join('')}
       <p class="sec-note">Suggestions, not endorsements — no affiliate links and nothing is tracked. Prices are rough and move around. Buy one thing at a time and give it six weeks; changing everything at once means you never learn what worked.</p>
+    </div>` : ''}
+
+    ${Array.isArray(plan.ramp) && plan.ramp.length ? `
+    <div class="sec">
+      <p class="sec-title">How to start, week by week</p>
+      ${plan.ramp.map(w => `
+        <div class="rem-card">
+          <div class="rem-name">${escapeHtml(w.week)} — ${escapeHtml(w.doing)}</div>
+          <div class="rem-how">${escapeHtml(w.why)}</div>
+        </div>`).join('')}
+      <p class="sec-note">One new thing at a time. If everything starts at once and your skin reacts, you have no way of knowing which one to drop.</p>
+    </div>` : ''}
+
+    ${Array.isArray(plan.expect) && plan.expect.length ? `
+    <div class="sec">
+      <p class="sec-title">What to expect, and when</p>
+      <div class="notes">
+        ${plan.expect.map(e => `
+          <div class="note-item">
+            <div class="note-key">${escapeHtml(e.when)}</div>
+            <div class="note-txt">${escapeHtml(e.what)}</div>
+          </div>`).join('')}
+      </div>
     </div>` : ''}
 
     <div class="sec">
@@ -2313,6 +2729,38 @@ function renderPlan(plan, fromAI){
         </div>`).join('')}
     </div>` : ''}
 
+    ${isHair && plan.faceShape ? `
+    <div class="sec">
+      <p class="sec-title">Cuts that suit your face</p>
+      <h2 class="hero-type" style="font-size:1.7rem"><em>${escapeHtml(plan.faceShape.name)}</em></h2>
+      <p class="hero-sum">${escapeHtml(plan.faceShape.reading)} ${escapeHtml(plan.faceShape.goal)}</p>
+      <div class="stats" style="margin-bottom:6px">
+        <div class="stat"><div class="stat-val">${plan.faceShape.lengthRatio}</div><div class="stat-lab">length against width</div></div>
+        <div class="stat"><div class="stat-val">${plan.faceShape.jawRatio}</div><div class="stat-lab">jaw against cheekbone</div></div>
+      </div>
+      <p class="q-hint" style="margin:18px 0 8px">Ask for</p>
+      <ul class="bullets">${plan.faceShape.cuts.map(c => `<li>${escapeHtml(c)}</li>`).join('')}</ul>
+      <p class="q-hint" style="margin:18px 0 8px">Think twice about</p>
+      <ul class="avoid-list">${plan.faceShape.avoid.map(a => `<li>${escapeHtml(a)}</li>`).join('')}</ul>
+      <div class="rem-card" style="margin-top:16px">
+        <div class="rem-name">Parting</div>
+        <div class="rem-how">${escapeHtml(plan.faceShape.parting)}</div>
+      </div>
+      <div class="rem-card">
+        <div class="rem-name">Tell your stylist this</div>
+        <div class="rem-how">${escapeHtml(plan.faceShape.cutNote)}</div>
+      </div>
+      <p class="sec-note">Measured from the landmarks in your photo — how long your face is against how wide, and how the jaw compares to the cheekbones. This is what suits a proportion, not a rule about how anyone should look. Ignore any of it freely.</p>
+    </div>` : ''}
+
+    ${isHair && plan.occasions ? `
+    <div class="sec">
+      <p class="sec-title">Style it for the day you're having</p>
+      <div class="chips">${Object.keys(plan.occasions).map((k, i) =>
+        `<button class="starter${i === 0 ? ' on' : ''}" data-occasion="${k}">${escapeHtml(OCCASION_LABELS[k])}</button>`).join('')}</div>
+      <div id="occasionBody" style="margin-top:16px"></div>
+    </div>` : ''}
+
     ${isHair && Array.isArray(plan.stylingBasics) && plan.stylingBasics.length ? `
     <div class="sec">
       <p class="sec-title">Heat and tool rules</p>
@@ -2335,6 +2783,22 @@ function renderPlan(plan, fromAI){
 
   const refineBtn = document.getElementById('refineHairBtn');
   if (refineBtn) refineBtn.addEventListener('click', () => startGuide('hair', guideState.skinType));
+
+  if (plan.occasions){
+    const body = document.getElementById('occasionBody');
+    const chips = [...els.guideCard.querySelectorAll('[data-occasion]')];
+    const showOccasion = key => {
+      const o = plan.occasions[key];
+      chips.forEach(c => c.classList.toggle('on', c.dataset.occasion === key));
+      body.innerHTML = `
+        <div class="day-col">
+          <div class="day-head">${escapeHtml(OCCASION_LABELS[key])} · ${escapeHtml(o.time)}</div>
+          <ol class="routine-steps">${o.steps.map(st => `<li>${escapeHtml(st)}</li>`).join('')}</ol>
+        </div>`;
+    };
+    chips.forEach(c => c.addEventListener('click', () => showOccasion(c.dataset.occasion)));
+    showOccasion(chips[0]?.dataset.occasion || 'everyday');
+  }
 
   els.guideCard.querySelectorAll('[data-hairtype]').forEach(b => b.addEventListener('click', () =>
     startPhotoHairPlan({ hairType: b.dataset.hairtype, concern: plan.concern })));
@@ -2404,6 +2868,8 @@ Hard rules that override anything the person asks for:
 - Tell people to patch test anything new for 24 hours.
 - Assume no age gate: everything must be safe for a teenager.
 - If someone describes something painful, spreading, bleeding, or not healing, say plainly it is worth seeing a dermatologist, without naming what it might be.
+
+You are the two things people wish they had on call: a hair stylist who knows their hair, and a level-headed skincare advisor. As a stylist, talk about cuts, lengths, partings, fringes, styling technique and what suits a face shape, and be specific about how to actually do it. As a skincare advisor, talk about order of application, what not to layer together, how fast to introduce something new, and what a realistic timeline looks like — and be straight that you are not a doctor and cannot diagnose.
 
 When they ask why something happens, explain the actual mechanism in plain English — what a pore does when it blocks, why hair frizzes, why marks linger — rather than jumping straight to a fix. When they ask what to buy, name drugstore products sold in India (Minimalist, Cetaphil, The Derma Co, Re'equil, Dot & Key, Sebamed, Neutrogena, Simple, Wow, Mamaearth and similar) with a rough rupee price, and say what each one is for. Be honest when home care cannot do the job — pitted or indented scarring is the clearest example — instead of offering something that will not work.
 
@@ -2643,7 +3109,7 @@ async function runRead(){
 
   try{
     const canvas = await toCanvas(workingPhotoUrl);
-    const { box, noFace } = await detectFaceBox(canvas);
+    const { box, noFace, faceShape } = await detectFaceBox(canvas);
 
     if (noFace){
       await minDelay;
@@ -2659,6 +3125,8 @@ async function runRead(){
     // Same photo, second read: the hair around the face box.
     lastHairMetrics = readHairMetrics(canvas, box);
     reading.hair = hairReadout(lastHairMetrics);
+    lastFaceShape = faceShape || null;
+    reading.faceShape = lastFaceShape;
 
     await minDelay;
     stopStatusCycle();

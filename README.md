@@ -47,6 +47,48 @@ character — straight, wavy, curly, coily, glossy, matte, frizzy, sparse — an
 checks the measurements order correctly. That validates the maths, not accuracy
 on real heads, which is exactly why one tap overrides it.
 
+### The stylist
+
+The photo already has 478 face landmarks in it, so the app measures the four
+things a stylist looks at before cutting: how long the face is, and how wide it
+is at the temples, the cheekbones and the jaw. Ratios, not pixels — and scaled
+back into pixel space first, because landmarks arrive normalised per axis and
+measuring them raw would report any portrait photo as a long face.
+
+That gives one of six shapes, and with it: cuts to ask for, cuts to think twice
+about, which parting suits it, and one line to tell your stylist about how your
+hair type behaves under scissors (curly hair cut wet is how people end up with a
+triangle). It is what creates or breaks a proportion — not a rule about how
+anyone should look, and it says so.
+
+Then **six occasions**, each with its own routine for your hair type: everyday,
+work, wedding or party, gym, a humid monsoon day, and day three without a wash.
+Tap one and the steps change — a party routine for coily hair is a twist-out
+prepared the night before, for straight hair it is a tong and letting each curl
+cool in your palm.
+
+No face shape appears when the landmarks did not resolve. A guessed one would be
+worse than none.
+
+### The skincare advisor, which is not a dermatologist
+
+It cannot diagnose and does not try. What it does give you is what a good
+consultation actually leaves you with:
+
+- **The order things go on in** — thin before thick, sunscreen last in the
+  morning. Wrong order is the most common reason a routine full of good products
+  does nothing.
+- **What not to put together** — two exfoliants in a night, vitamin C with
+  benzoyl peroxide, a new active plus a scrub in the same week. These irritate
+  rather than injure, and the plan says that plainly rather than alarming you.
+- **A four-week ramp-up built from your own product list** — one new thing at a
+  time, two nights before three. If the cleanser it picked carries an active,
+  week one holds it back and week three alternates the two rather than stacking
+  them.
+- **What to expect and when** — including that the first two weeks of a spot
+  routine often look worse, which is the stage most people quit at, and that
+  marks take months no matter what you buy.
+
 Cosmetic guidance only. Neither plan names a medical condition, and neither
 claims to treat, cure, or regrow anything. Where home care genuinely cannot fix
 something — pitted scarring is the clear case — the plan says so and points at a
