@@ -7,19 +7,27 @@ The whole app is `index.html` — no build step, no dependencies to install.
 
 ## What it does
 
-1. Camera or upload → the photo stays in the browser tab.
+1. Camera or upload → the photo stays in the browser tab. While it's read, a
+   scan effect sweeps over the frame instead of a bare spinner — one photo, one
+   pass, and everything below comes out of that single pass.
 2. MediaPipe finds the face; per-region shine, texture and redness are measured
    from the pixels and compared against the face's own average.
 3. Results: skin type, a shine-by-region chart from the actual measurements,
    routine, and ingredients with brand names common in Indian pharmacies.
-4. **Face plan** — pick what's bothering you (spots, large pores or pitted
-   marks, redness, dark marks, oil, dryness) and the plan opens with **why it
-   happens**: what a pore actually does when it blocks, why skin flushes, why
-   a mark outlives the spot that caused it. Then what makes it worse, the myths
-   worth dropping, a morning/evening rhythm, **what to buy** — four named
-   drugstore products with rough rupee prices — kitchen-shelf remedies, and the
-   DIY list to avoid (lemon juice, baking soda, toothpaste and friends cause
-   real damage).
+4. **Face plan, with no questionnaire in the way.** One tap on the results
+   screen and the measured skin type — oily, dry, combination, sensitive,
+   normal — points at a starting concern and the full plan appears immediately:
+   **why it happens** (what a pore actually does when it blocks, why skin
+   flushes, why a mark outlives the spot that caused it), what makes it worse,
+   the myths worth dropping, **food worth thinking about** (what may be worth
+   cutting back on and what actually helps more, honestly hedged — diet is a
+   minor lever here, not a cure), the order things go on in, what not to layer
+   together, a morning/evening rhythm, **what to buy** — four named drugstore
+   products with rough rupee prices — a four-week ramp-up, a realistic
+   timeline, kitchen-shelf remedies, and the DIY list to avoid (lemon juice,
+   baking soda, toothpaste and friends cause real damage). If the guess is
+   wrong, six chips at the top switch the concern and the plan rebuilds
+   instantly. The full questionnaire is still there for anyone who wants it.
 5. **Hair plan, from the same photo, with no questions at all.** The hair read
    measures four things from the pixels: how tightly the hair bends (a
    smoothed, curl-width comparison across each row), how much light comes back
@@ -88,6 +96,11 @@ consultation actually leaves you with:
 - **What to expect and when** — including that the first two weeks of a spot
   routine often look worse, which is the stage most people quit at, and that
   marks take months no matter what you buy.
+- **Food worth thinking about**, per concern — what may be worth cutting back
+  on (the sugar-and-dairy link to breakouts is real for some people, modest,
+  and not universal) and what is more useful than avoiding things. Framed as an
+  honest "maybe 10%, not the main event" rather than a diet fix, because that is
+  what the actual evidence supports.
 
 Cosmetic guidance only. Neither plan names a medical condition, and neither
 claims to treat, cure, or regrow anything. Where home care genuinely cannot fix
@@ -183,7 +196,8 @@ supabase functions deploy skin-guide --no-verify-jwt
 Cost: the function defaults to `claude-opus-5`. For a task this small,
 `claude-haiku-4-5` is roughly a fifth the price per call and plenty capable —
 switch with `supabase secrets set ANTHROPIC_MODEL=claude-haiku-4-5`, no code
-change. Either way it only runs when someone taps "Build my face plan",
+change. Either way it only runs when someone taps "See what's causing it, and
+what to buy" on the results screen,
 not on every skin read.
 
 Rate limiting is built in (5 requests per minute per IP). It's in-memory, so it

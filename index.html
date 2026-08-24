@@ -106,6 +106,35 @@
     border:1.5px solid rgba(255,255,255,0.45); border-radius:50%/58%;
   }
 
+  /* The scan effect: a sweeping line plus corner brackets over the still photo
+     while the read runs, so waiting reads as "actively scanning" rather than a
+     spinner with no relationship to what is happening underneath it. */
+  .scanfx{ pointer-events:none; }
+  .scanfx-grid{
+    position:absolute; inset:0;
+    background-image:
+      linear-gradient(rgba(200,169,106,0.09) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(200,169,106,0.09) 1px, transparent 1px);
+    background-size:8% 8%;
+    opacity:0; animation:scanfx-fade 0.4s ease forwards;
+  }
+  .scanfx-line{
+    position:absolute; left:0; right:0; height:22%;
+    background:linear-gradient(180deg, transparent, rgba(200,169,106,0.34) 46%, rgba(224,198,143,0.55) 50%, rgba(200,169,106,0.34) 54%, transparent);
+    animation:scanfx-sweep 2.2s cubic-bezier(.45,0,.55,1) infinite;
+    box-shadow:0 0 24px 6px rgba(200,169,106,0.16);
+  }
+  .scanfx-corner{
+    position:absolute; width:22px; height:22px; border:1.5px solid var(--accent-soft); opacity:0.85;
+    animation:scanfx-fade 0.4s ease forwards;
+  }
+  .scanfx-corner.tl{ top:6%; left:6%; border-right:none; border-bottom:none; }
+  .scanfx-corner.tr{ top:6%; right:6%; border-left:none; border-bottom:none; }
+  .scanfx-corner.bl{ bottom:6%; left:6%; border-right:none; border-top:none; }
+  .scanfx-corner.br{ bottom:6%; right:6%; border-left:none; border-top:none; }
+  @keyframes scanfx-sweep{ 0%{ top:-24%; } 100%{ top:102%; } }
+  @keyframes scanfx-fade{ from{ opacity:0; } to{ opacity:1; } }
+
   .pins{ pointer-events:none; }
   .pin{
     position:absolute; transform:translate(-50%,-50%) scale(0.4); opacity:0;
@@ -322,6 +351,8 @@
 
   @media (prefers-reduced-motion:reduce){
     .pin,.btn,.bar-fill{ transition:none !important; }
+    .scanfx-line{ animation:none; top:50%; }
+    .scanfx-grid,.scanfx-corner{ animation:none; opacity:1; }
   }
 </style>
 </head>
@@ -356,6 +387,12 @@
       </div>
       <div class="guide" id="guide" hidden></div>
       <div class="pins" id="pins" hidden></div>
+      <div class="scanfx" id="scanFx" hidden>
+        <div class="scanfx-grid"></div>
+        <div class="scanfx-line"></div>
+        <i class="scanfx-corner tl"></i><i class="scanfx-corner tr"></i>
+        <i class="scanfx-corner bl"></i><i class="scanfx-corner br"></i>
+      </div>
     </div>
 
     <p class="status" id="statusLine" aria-live="polite"></p>
@@ -1258,7 +1295,20 @@ const SKIN_CAUSES = {
     myths: [
       'Not caused by being unclean. Washing more often makes it worse, not better.',
       'Chocolate and oily food are not established causes, though a very high-sugar diet may play a role for some people.'
-    ]
+    ],
+    diet: {
+      avoid: [
+        'High-glycemic foods eaten often — white bread, white rice, sugary drinks, pastries. These spike blood sugar fast, and the insulin response that follows is linked to more oil production for some people. Not everyone reacts the same way, and it is a "may help to cut back" rather than a rule.',
+        'A lot of milk, specifically — several studies link daily milk (more than the occasional coffee splash) to more breakouts in some people, skimmed milk included. Cheese and yoghurt show a weaker link.',
+        'Whey protein powder taken daily, for the same hormonal reason as milk. Worth a two-month break if you are on it and breaking out along your jaw.'
+      ],
+      help: [
+        'Nothing you eat clears skin on its own — this is about lowering an occasional contributor, not fixing the cause. The real fixes are the routine and the products above.',
+        'If you want to test it, drop one thing for six to eight weeks and watch — not everything at once, or you will not know what changed.',
+        'Whole grains, vegetables and unsweetened food in general keep blood sugar steadier through the day, which is the same mechanism as avoiding the spikes.'
+      ],
+      note: 'The evidence here is real but modest, and it varies a lot person to person. Nobody\'s skin cleared from diet alone while ignoring the routine — treat this as a possible extra 10%, not the main event.'
+    },
   },
   pores: {
     why: [
@@ -1276,7 +1326,18 @@ const SKIN_CAUSES = {
     myths: [
       'Hot water and steam do not open pores; cold water does not close them. Pores have no muscles.',
       'If the marks are pitted — small dents or depressions rather than dots you can see into — that is textural scarring in the skin\'s structure. No cream, cleanser or home remedy resurfaces that. Only in-clinic treatment does, and a dermatologist is the honest answer.'
-    ]
+    ],
+    diet: {
+      avoid: [
+        'Nothing here has a meaningful diet link. Pore size is structural and genetic, and no food changes that.',
+        'The one indirect link is the same as pimples: a very high-sugar diet can increase oil and congestion, which fills pores and makes them more visible.'
+      ],
+      help: [
+        'Sunscreen is doing more for pore appearance than any food ever will, because UV breaks down the collagen that keeps pore walls firm.',
+        'General good hydration and a varied diet support skin the way they support everything else in the body — real, but not specific to pores.'
+      ],
+      note: 'Be wary of anything claiming a food or supplement shrinks pores. There is no credible mechanism for that, by mouth or otherwise.'
+    },
   },
   redness: {
     why: [
@@ -1294,7 +1355,18 @@ const SKIN_CAUSES = {
     myths: [
       'Stinging does not mean a product is working. It means the barrier is irritated.',
       'Redness that comes with visible bumps, burning, or that never settles is worth a dermatologist\'s eye rather than another product.'
-    ]
+    ],
+    diet: {
+      avoid: [
+        'Very spicy food, alcohol and hot drinks can trigger a visible flush in people prone to it, the same way a hot shower does — it is a temporary vessel response, not an allergy.',
+        'Keeping a simple diary of what you ate before a flush is more useful than avoiding whole food groups on a guess.'
+      ],
+      help: [
+        'Nothing you eat calms a reactive barrier the way a shorter, gentler routine does. Diet is a minor lever here, not the main one.',
+        'Staying hydrated and getting enough sleep help skin recover generally, though neither is specific to redness.'
+      ],
+      note: 'If redness flares hard after food specifically — not just looking pink, but swelling, hives or breathing symptoms — that is worth medical attention as a possible allergy, separate from ordinary skin redness.'
+    },
   },
   marks: {
     why: [
@@ -1311,7 +1383,17 @@ const SKIN_CAUSES = {
     myths: [
       'Lemon juice does not fade marks. It irritates skin and reacts with sunlight to make dark patches worse.',
       'Flat marks fade with time and sun protection. Pitted or raised scars do not — those need a dermatologist.'
-    ]
+    ],
+    diet: {
+      avoid: [
+        'No food is established to make marks darker or slower to fade. This one is almost entirely about sun exposure and time, not diet.'
+      ],
+      help: [
+        'Vitamin C in food (citrus, amla, bell peppers) supports the skin\'s own repair processes generally, though eating it does far less than applying sunscreen daily and consistently.',
+        'A generally balanced diet supports skin turnover, which is what fades a mark — but this is a small, slow effect next to sun protection.'
+      ],
+      note: 'If a claim promises diet or a supplement will fade marks fast, be skeptical — sunscreen and months of patience are what actually does the work.'
+    },
   },
   oil: {
     why: [
@@ -1329,7 +1411,18 @@ const SKIN_CAUSES = {
     myths: [
       'Oily skin still needs moisturiser. Skipping it is one of the most common reasons oil gets worse.',
       'Blotting shine is fine; re-washing to remove it is not.'
-    ]
+    ],
+    diet: {
+      avoid: [
+        'The same high-glycemic pattern as pimples — frequent sugary and refined-carb food is linked to higher oil output for some people through the insulin response.',
+        'Very high dairy intake shows the same weak-to-moderate link mentioned for breakouts, since oil and breakouts share the same hormonal driver.'
+      ],
+      help: [
+        'Steadier meals with protein, fibre and whole grains keep blood sugar more level through the day, which is the mechanism, not a specific "good food".',
+        'This is a minor lever next to genetics and hormones, which set most of your baseline oil production.'
+      ],
+      note: 'Oily skin is mostly inherited. Diet can nudge it slightly; it will not change your skin type.'
+    },
   },
   dry: {
     why: [
@@ -1347,7 +1440,18 @@ const SKIN_CAUSES = {
     myths: [
       'Drinking more water helps overall health but does not by itself fix a stripped barrier — what you put on the skin matters more here.',
       'Oils alone do not hydrate. They seal; you need water underneath them.'
-    ]
+    ],
+    diet: {
+      avoid: [
+        'Nothing specific to avoid — dryness here is almost always about the barrier and the environment, not food.',
+        'Excess alcohol and caffeine are mildly dehydrating in general, though the effect on skin specifically is small next to what you put on your skin.'
+      ],
+      help: [
+        'Foods with omega-3 fats (fish, walnuts, flaxseed) support the skin barrier over the long term, as part of overall nutrition rather than a fast fix.',
+        'Drinking water supports your whole body, but a dehydrated body and a dry, flaky skin barrier are not the same problem — the second needs a moisturiser, not a glass of water.'
+      ],
+      note: 'If you are already eating reasonably and still flaking, the fix is almost certainly what you are washing and moisturising with, not your diet.'
+    },
   }
 };
 
@@ -1522,6 +1626,7 @@ function buildLocalPlan(answers, skinType){
     causes: causes.why,
     worse: causes.worse,
     myths: causes.myths,
+    diet: causes.diet,
     daily: [
       { time: 'Morning', steps: daily.Morning },
       { time: 'Evening', steps: daily.Evening }
@@ -1536,6 +1641,30 @@ function buildLocalPlan(answers, skinType){
     lifestyle,
     seeDoctor: PLAN_SEE_DOCTOR
   };
+}
+
+// What the read already measured points at one concern more than the others —
+// not a diagnosis, just the most useful starting guess. One tap overrides it,
+// same as the hair read.
+const SKIN_CONCERN_FROM_TYPE = {
+  Sensitive: 'redness',
+  Oily: 'oil',
+  Combination: 'pimples',
+  Dry: 'dry',
+  Normal: 'pimples'
+};
+
+const SKIN_CONCERN_LABEL = Object.fromEntries(GUIDE_QUESTIONS[0].options.map(o => [o.value, o.label]));
+
+// The photo-only route: no questionnaire. The measured skin type points at a
+// starting concern, and the plan appears immediately — the same shape as
+// startPhotoHairPlan, so scanning a face gives you everything in one motion
+// instead of a photo, then a results screen, then five more questions.
+function buildPhotoSkinPlan(skinType, overrides){
+  const guess = SKIN_CONCERN_FROM_TYPE[skinType] || 'pimples';
+  const concern = overrides?.concern || guess;
+  const plan = buildLocalPlan({ concern }, skinType);
+  return { ...plan, fromPhoto: true, concern, corrected: concern !== guess };
 }
 
 /* ---------- hair: on-device plan (no network) ---------- */
@@ -2193,6 +2322,7 @@ function planLooksValid(plan, topic){
 const els = {
   video: document.getElementById('video'),
   still: document.getElementById('stillFrame'),
+  scanFx: document.getElementById('scanFx'),
   empty: document.getElementById('emptyState'),
   guide: document.getElementById('guide'),
   pins: document.getElementById('pins'),
@@ -2232,7 +2362,7 @@ function stopCamera(){
 
 function phaseIdle(){
   stopCamera();
-  hide(els.video); hide(els.still); show(els.empty); hide(els.guide); hide(els.pins);
+  hide(els.video); hide(els.still); show(els.empty); hide(els.guide); hide(els.pins); hide(els.scanFx);
   show(els.idle); hide(els.camera); hide(els.preview);
   setStatus('');
 }
@@ -2447,7 +2577,7 @@ function renderResults(r){
 
     <p class="fine">${escapeHtml(r.footnote)}</p>
     <div class="row" style="margin-bottom:10px">
-      <button class="btn btn-primary" id="guideBtn">Build my face plan</button>
+      <button class="btn btn-primary" id="guideBtn">See what's causing it, and what to buy</button>
     </div>
     <div class="row"><button class="btn btn-ghost" id="startOverBtn">Start over</button></div>
     <button class="linkbtn" id="hairFromResults">${r.hair ? 'Prefer to answer questions about your hair? →' : 'Get a hair care plan too →'}</button>
@@ -2461,7 +2591,7 @@ function renderResults(r){
     });
   });
 
-  document.getElementById('guideBtn').addEventListener('click', () => startGuide('skin', r.skinType));
+  document.getElementById('guideBtn').addEventListener('click', () => startPhotoSkinPlan());
   document.getElementById('hairFromResults').addEventListener('click', () => startGuide('hair', r.skinType));
   const hairPhotoBtn = document.getElementById('hairPhotoPlanBtn');
   if (hairPhotoBtn) hairPhotoBtn.addEventListener('click', startPhotoHairPlan);
@@ -2512,6 +2642,16 @@ function startPhotoHairPlan(overrides){
   hide(els.captureCard); hide(els.resultsCard); hide(els.chatCard);
   show(els.guideCard);
   renderPlan(buildPhotoHairPlan(lastHairMetrics, overrides), false);
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function startPhotoSkinPlan(overrides){
+  if (!lastReading) return;
+  const skinType = lastReading.skinType;
+  guideState = { topic: 'skin', step: 0, answers: {}, seeded: {}, skinType };
+  hide(els.captureCard); hide(els.resultsCard); hide(els.chatCard);
+  show(els.guideCard);
+  renderPlan(buildPhotoSkinPlan(skinType, overrides), false);
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
@@ -2574,7 +2714,7 @@ async function buildPlan(){
   // from the device, even when the prose came from elsewhere.
   const plan = useRemote
     ? { ...remote, order: local.order, mixWarnings: local.mixWarnings, ramp: local.ramp,
-        expect: local.expect, occasions: local.occasions, faceShape: local.faceShape }
+        expect: local.expect, diet: local.diet, occasions: local.occasions, faceShape: local.faceShape }
     : local;
   renderPlan(plan, useRemote);
 }
@@ -2592,7 +2732,7 @@ function renderPlan(plan, fromAI){
     <p class="plan-src">${escapeHtml(source)}</p>
     <p class="plan-lede">${escapeHtml(plan.summary)}</p>
 
-    ${plan.fromPhoto ? `
+    ${plan.fromPhoto && isHair ? `
     <div class="sec">
       <p class="sec-title">Change it in one tap</p>
       <p class="plan-lede" style="font-size:0.95rem">A camera reads the outside of your hair. It cannot see how your scalp feels or whether more is coming out than usual — and it can be wrong about the rest. Correct either line and the plan rebuilds straight away.</p>
@@ -2604,6 +2744,15 @@ function renderPlan(plan, fromAI){
         `<button class="starter${v === plan.concern ? ' on' : ''}" data-concern="${v}">${escapeHtml(label)}</button>`).join('')}</div>
       <p class="sec-note">The last two are the ones no photo can show. Pick either and the plan switches to it.</p>
       <div class="row" style="margin-top:14px"><button class="btn btn-ghost" id="refineHairBtn">Or answer five questions</button></div>
+    </div>` : ''}
+
+    ${plan.fromPhoto && !isHair ? `
+    <div class="sec">
+      <p class="sec-title">Change it in one tap</p>
+      <p class="plan-lede" style="font-size:0.95rem">The photo pointed at ${escapeHtml((SKIN_CONCERN_LABEL[plan.concern] || plan.concern).toLowerCase())} as the most likely thing to work on. If something else bothers you more, pick it — the plan rebuilds straight away.</p>
+      <div class="chips">${GUIDE_QUESTIONS[0].options.map(o =>
+        `<button class="starter${o.value === plan.concern ? ' on' : ''}" data-skinconcern="${o.value}">${escapeHtml(o.label)}</button>`).join('')}</div>
+      <div class="row" style="margin-top:14px"><button class="btn btn-ghost" id="refineSkinBtn">Or answer a few questions</button></div>
     </div>` : ''}
 
     ${Array.isArray(plan.causes) && plan.causes.length ? `
@@ -2624,6 +2773,16 @@ function renderPlan(plan, fromAI){
       <div class="doc-box" style="border-left-color:var(--accent);background:rgba(200,169,106,0.04)">
         <ul>${plan.myths.map(m => `<li>${escapeHtml(m)}</li>`).join('')}</ul>
       </div>
+    </div>` : ''}
+
+    ${plan.diet && !isHair ? `
+    <div class="sec">
+      <p class="sec-title">Food worth thinking about</p>
+      <p class="q-hint" style="margin-bottom:8px">Cut back on</p>
+      <ul class="avoid-list">${plan.diet.avoid.map(a => `<li>${escapeHtml(a)}</li>`).join('')}</ul>
+      <p class="q-hint" style="margin:16px 0 8px">More useful than avoiding</p>
+      <ul class="bullets">${plan.diet.help.map(h => `<li>${escapeHtml(h)}</li>`).join('')}</ul>
+      <p class="sec-note">${escapeHtml(plan.diet.note)}</p>
     </div>` : ''}
 
     <div class="sec">
@@ -2783,6 +2942,8 @@ function renderPlan(plan, fromAI){
 
   const refineBtn = document.getElementById('refineHairBtn');
   if (refineBtn) refineBtn.addEventListener('click', () => startGuide('hair', guideState.skinType));
+  const refineSkinBtn = document.getElementById('refineSkinBtn');
+  if (refineSkinBtn) refineSkinBtn.addEventListener('click', () => startGuide('skin', guideState.skinType));
 
   if (plan.occasions){
     const body = document.getElementById('occasionBody');
@@ -2804,10 +2965,13 @@ function renderPlan(plan, fromAI){
     startPhotoHairPlan({ hairType: b.dataset.hairtype, concern: plan.concern })));
   els.guideCard.querySelectorAll('[data-concern]').forEach(b => b.addEventListener('click', () =>
     startPhotoHairPlan({ hairType: plan.hairType, concern: b.dataset.concern })));
+  els.guideCard.querySelectorAll('[data-skinconcern]').forEach(b => b.addEventListener('click', () =>
+    startPhotoSkinPlan({ concern: b.dataset.skinconcern })));
 
   document.getElementById('leaveGuideBtn').addEventListener('click', leaveGuide);
   document.getElementById('redoGuide').addEventListener('click', () => {
-    if (plan.fromPhoto && lastHairMetrics) startPhotoHairPlan();
+    if (plan.fromPhoto && isHair && lastHairMetrics) startPhotoHairPlan();
+    else if (plan.fromPhoto && !isHair && lastReading) startPhotoSkinPlan();
     else startGuide(guideState.topic, guideState.skinType);
   });
 }
@@ -2871,7 +3035,7 @@ Hard rules that override anything the person asks for:
 
 You are the two things people wish they had on call: a hair stylist who knows their hair, and a level-headed skincare advisor. As a stylist, talk about cuts, lengths, partings, fringes, styling technique and what suits a face shape, and be specific about how to actually do it. As a skincare advisor, talk about order of application, what not to layer together, how fast to introduce something new, and what a realistic timeline looks like — and be straight that you are not a doctor and cannot diagnose.
 
-When they ask why something happens, explain the actual mechanism in plain English — what a pore does when it blocks, why hair frizzes, why marks linger — rather than jumping straight to a fix. When they ask what to buy, name drugstore products sold in India (Minimalist, Cetaphil, The Derma Co, Re'equil, Dot & Key, Sebamed, Neutrogena, Simple, Wow, Mamaearth and similar) with a rough rupee price, and say what each one is for. Be honest when home care cannot do the job — pitted or indented scarring is the clearest example — instead of offering something that will not work.
+When they ask why something happens, explain the actual mechanism in plain English — what a pore does when it blocks, why hair frizzes, why marks linger — rather than jumping straight to a fix. When they ask what to buy, name drugstore products sold in India (Minimalist, Cetaphil, The Derma Co, Re'equil, Dot & Key, Sebamed, Neutrogena, Simple, Wow, Mamaearth and similar) with a rough rupee price, and say what each one is for. Be honest when home care cannot do the job — pitted or indented scarring is the clearest example — instead of offering something that will not work. When diet comes up, keep it proportionate: a high-sugar diet and, for some people, a lot of daily milk have a real but modest link to breakouts — worth a two-month experiment, never a promise, and always second to the actual routine.
 
 Keep replies short — two or three sentences unless asked for detail. Be specific and practical, not generic.`;
 
@@ -3104,6 +3268,7 @@ function leaveChat(){
 
 async function runRead(){
   hide(els.preview);
+  show(els.scanFx);
   cycleStatus();
   const minDelay = new Promise(r => setTimeout(r, CFG.resultRevealMs));
 
@@ -3114,6 +3279,7 @@ async function runRead(){
     if (noFace){
       await minDelay;
       stopStatusCycle();
+      hide(els.scanFx);
       showError("We couldn't quite find a face in that photo. Try again with even lighting, facing the camera directly.");
       return;
     }
@@ -3130,6 +3296,7 @@ async function runRead(){
 
     await minDelay;
     stopStatusCycle();
+    hide(els.scanFx);
     lastReading = reading;
     renderResults(reading);
     hide(els.captureCard); show(els.resultsCard);
@@ -3137,6 +3304,7 @@ async function runRead(){
     console.error(err);
     try{ await minDelay; }catch{}
     stopStatusCycle();
+    hide(els.scanFx);
     showError('Something went wrong reading that photo. Please try again.');
   }
 }
