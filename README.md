@@ -5,6 +5,15 @@ heuristics, all client-side. No photo upload, no account, no server required.
 
 The whole app is `index.html` — no build step, no dependencies to install.
 
+## Also in this repo: COMEBACK // 60
+
+[`comeback60/`](comeback60/) is a separate app — a 60-day transformation
+dashboard (hair, skin, grooming, physique, posture, sleep, style, presence,
+discipline), not a photo-analysis tool. Same zero-build, zero-server, nothing-
+leaves-the-device philosophy as this one, just a different product. See
+[`comeback60/README.md`](comeback60/README.md) for what it does and how to
+deploy it.
+
 ## Your personal stylist and skincare advisor
 
 One photo, one button — **"Start my comeback plan"** on the results screen —
