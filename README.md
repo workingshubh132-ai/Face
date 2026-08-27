@@ -5,6 +5,17 @@ heuristics, all client-side. No photo upload, no account, no server required.
 
 The whole app is `index.html` — no build step, no dependencies to install.
 
+## Your personal stylist and skincare advisor
+
+One photo, one button — **"Start my comeback plan"** on the results screen —
+and the app runs both roles in sequence: your skincare advisor first (causes,
+food, products, a routine), then straight on to your hair stylist (cuts for
+your face shape, styling for your hair type, occasion-by-occasion routines).
+Part 1 of 2, then part 2 of 2, with a link back to the first half from the
+second. No questionnaire in either half — the photo already told it what it
+needs, and one-tap chips fix anything it read wrong. Neither role invents
+what it can't see: it explains, it recommends, it never diagnoses.
+
 ## What it does
 
 1. Camera or upload → the photo stays in the browser tab. While it's read, a

@@ -365,7 +365,7 @@
       <span class="badge">On your device</span>
     </div>
     <div class="masthead-rule"></div>
-    <p class="masthead-sub">A considered read of your skin and hair, measured from a single photo that never leaves this page.</p>
+    <p class="masthead-sub">Your personal hair stylist and skincare advisor, measured from a single photo that never leaves this page.</p>
   </header>
 
   <section class="card" id="captureCard">
@@ -2577,8 +2577,10 @@ function renderResults(r){
 
     <p class="fine">${escapeHtml(r.footnote)}</p>
     <div class="row" style="margin-bottom:10px">
-      <button class="btn btn-primary" id="guideBtn">See what's causing it, and what to buy</button>
+      <button class="btn btn-primary" id="comebackBtn">Start my comeback plan →</button>
     </div>
+    <p class="sec-note" style="margin:-2px 0 14px">Your skincare advisor, then your stylist — causes, food, products and a routine, straight into cuts and styling for your hair. One photo, both.</p>
+    <div class="row"><button class="btn btn-ghost" id="guideBtn">Just the skin plan →</button></div>
     <div class="row"><button class="btn btn-ghost" id="startOverBtn">Start over</button></div>
     <button class="linkbtn" id="hairFromResults">${r.hair ? 'Prefer to answer questions about your hair? →' : 'Get a hair care plan too →'}</button>
     <button class="linkbtn" id="chatFromResults">Ask a question about your read →</button>
@@ -2591,10 +2593,14 @@ function renderResults(r){
     });
   });
 
-  document.getElementById('guideBtn').addEventListener('click', () => startPhotoSkinPlan());
+  document.getElementById('comebackBtn').addEventListener('click', startComebackPlan);
+  // These three are standalone entry points, not steps inside a comeback
+  // journey — each must start clean rather than inherit a comeback flag left
+  // over from a previous visit to this results screen.
+  document.getElementById('guideBtn').addEventListener('click', () => { guideState.comeback = false; startPhotoSkinPlan(); });
   document.getElementById('hairFromResults').addEventListener('click', () => startGuide('hair', r.skinType));
   const hairPhotoBtn = document.getElementById('hairPhotoPlanBtn');
-  if (hairPhotoBtn) hairPhotoBtn.addEventListener('click', startPhotoHairPlan);
+  if (hairPhotoBtn) hairPhotoBtn.addEventListener('click', () => { guideState.comeback = false; startPhotoHairPlan(); });
   document.getElementById('chatFromResults').addEventListener('click', openChat);
 
   document.getElementById('startOverBtn').addEventListener('click', () => {
@@ -2638,7 +2644,10 @@ function startGuide(topic, skinType){
 // no questionnaire in between.
 function startPhotoHairPlan(overrides){
   if (!lastHairMetrics) return;
-  guideState = { topic: 'hair', step: 0, answers: {}, seeded: {}, skinType: guideState.skinType };
+  // Corrections re-enter this function while the comeback flow is already
+  // running, so the flag has to survive — otherwise picking "coily" mid-plan
+  // would silently drop you out of the two-part journey.
+  guideState = { topic: 'hair', step: 0, answers: {}, seeded: {}, skinType: guideState.skinType, comeback: guideState.comeback };
   hide(els.captureCard); hide(els.resultsCard); hide(els.chatCard);
   show(els.guideCard);
   renderPlan(buildPhotoHairPlan(lastHairMetrics, overrides), false);
@@ -2648,11 +2657,19 @@ function startPhotoHairPlan(overrides){
 function startPhotoSkinPlan(overrides){
   if (!lastReading) return;
   const skinType = lastReading.skinType;
-  guideState = { topic: 'skin', step: 0, answers: {}, seeded: {}, skinType };
+  guideState = { topic: 'skin', step: 0, answers: {}, seeded: {}, skinType, comeback: guideState.comeback };
   hide(els.captureCard); hide(els.resultsCard); hide(els.chatCard);
   show(els.guideCard);
   renderPlan(buildPhotoSkinPlan(skinType, overrides), false);
   window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+// The comeback flow: one photo, both roles. Skin first — a personal skincare
+// advisor's read — then straight on to the hair stylist's read, as one
+// journey rather than two separate buttons a person has to know to click.
+function startComebackPlan(){
+  guideState.comeback = true;
+  startPhotoSkinPlan();
 }
 
 function renderQuestion(){
@@ -2721,14 +2738,19 @@ async function buildPlan(){
 
 function renderPlan(plan, fromAI){
   const isHair = guideState.topic === 'hair';
+  const comeback = !!guideState.comeback;
   const source = plan.fromPhoto
     ? 'Read off your photo on this device — no questions asked, and the photo went nowhere.'
     : fromAI
       ? 'Written for you by Claude, from your answers — your photo was never sent.'
       : 'Built on your device from your answers — nothing was sent anywhere.';
+  const title = comeback
+    ? (isHair ? 'Your comeback plan · Part 2 — Hair' : 'Your comeback plan · Part 1 — Skin')
+    : (isHair ? 'Your hair plan' : 'Your face plan');
 
   els.guideCard.innerHTML = `
-    <p class="sec-title">${isHair ? 'Your hair plan' : 'Your face plan'}</p>
+    <p class="sec-title">${escapeHtml(title)}</p>
+    ${comeback && isHair ? `<button class="linkbtn" id="backToSkinBtn" style="margin:-4px 0 10px">← Back to your skin plan</button>` : ''}
     <p class="plan-src">${escapeHtml(source)}</p>
     <p class="plan-lede">${escapeHtml(plan.summary)}</p>
 
@@ -2933,6 +2955,17 @@ function renderPlan(plan, fromAI){
       </div>
     </div>
 
+    ${comeback && !isHair ? `
+    <div class="sec" style="text-align:center">
+      ${lastHairMetrics ? `
+      <p class="sec-title">Part 2 of 2</p>
+      <p class="plan-lede" style="font-size:0.95rem">Skin's done. Same photo already has your hair in it.</p>
+      <div class="row"><button class="btn btn-primary" id="continueToHairBtn">Continue to your hair plan →</button></div>
+      ` : `
+      <p class="sec-note">Couldn't read enough hair from this photo to continue automatically — a shot with your hairline visible would let the stylist half do its job too.</p>
+      `}
+    </div>` : ''}
+
     <p class="fine">Habits and gentle home care — not a treatment, and not a substitute for a dermatologist. Give any change a few weeks before judging it.</p>
     <div class="row">
       <button class="btn btn-ghost" id="leaveGuideBtn">Back</button>
@@ -2944,6 +2977,10 @@ function renderPlan(plan, fromAI){
   if (refineBtn) refineBtn.addEventListener('click', () => startGuide('hair', guideState.skinType));
   const refineSkinBtn = document.getElementById('refineSkinBtn');
   if (refineSkinBtn) refineSkinBtn.addEventListener('click', () => startGuide('skin', guideState.skinType));
+  const continueToHairBtn = document.getElementById('continueToHairBtn');
+  if (continueToHairBtn) continueToHairBtn.addEventListener('click', () => startPhotoHairPlan());
+  const backToSkinBtn = document.getElementById('backToSkinBtn');
+  if (backToSkinBtn) backToSkinBtn.addEventListener('click', () => startPhotoSkinPlan());
 
   if (plan.occasions){
     const body = document.getElementById('occasionBody');
