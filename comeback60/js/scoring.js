@@ -288,6 +288,21 @@ export function averageSleepHours(state, uptoDayIndex){
   return n ? Math.round((sum / n) * 10) / 10 : null;
 }
 
+// Skin self-rating history over a trailing window — sparse by design (most
+// days won't have a rating logged), so this returns only the days that
+// actually have one rather than a dense array with gaps, which is what a
+// trend line over a self-reported metric should look like.
+export function skinRatingHistory(state, uptoDayIndex, windowDays){
+  const from = Math.max(1, uptoDayIndex - (windowDays - 1));
+  const points = [];
+  for (let d = from; d <= uptoDayIndex; d++){
+    const iso = isoForDayIndex(state.protocol.startDate, d);
+    const rating = state.days[iso]?.skin?.rating;
+    if (typeof rating === 'number') points.push({ day: d, rating });
+  }
+  return points;
+}
+
 export function habitsCompletedTotal(state, uptoDayIndex){
   let n = 0;
   for (let d = 1; d <= uptoDayIndex; d++){
@@ -356,6 +371,6 @@ export function finalReport(state, uptoDayIndex){
     averageSleep: averageSleepHours(state, uptoDayIndex),
     longestStreak: longestStreak(state, uptoDayIndex),
     perfectDays: perfectDaysCount(state, uptoDayIndex),
-    next90DayFocus: weakest.map(c => RECOMMENDATION_BY_CATEGORY[c.key]).filter(Boolean)
+    nextCycleFocus: weakest.map(c => RECOMMENDATION_BY_CATEGORY[c.key]).filter(Boolean)
   };
 }

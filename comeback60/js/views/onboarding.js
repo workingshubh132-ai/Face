@@ -1,7 +1,7 @@
 import { CATEGORIES, defaultWeights } from '../habits.js';
 import { LEVELS, EQUIPMENT } from '../workouts.js';
 import { escapeHtml } from '../ui.js';
-import { todayISO } from '../dates.js';
+import { todayISO, PROTOCOL_LENGTH } from '../dates.js';
 
 const PRIORITY_LABELS = {
   appearance: 'Hair, skin & grooming',
@@ -81,7 +81,7 @@ export function renderOnboarding(root, { onComplete }){
   }
 
   function view(){
-    if (step === 0) return screen('60 DAYS.', 'One system. Executed daily. Nothing random.');
+    if (step === 0) return screen(`${PROTOCOL_LENGTH} DAYS.`, 'One system. Executed daily. Nothing random.');
     if (step === 1) return screen("This isn't about<br>becoming someone else.", 'It\'s about removing what\'s in the way.');
     if (step === 2) return screen('It\'s about becoming<br>the sharpest version of yourself.', 'Identify the highest-impact changes. Execute them consistently. Track it honestly.');
     return setupScreen();

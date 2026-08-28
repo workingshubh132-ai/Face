@@ -1,6 +1,6 @@
 import { CATEGORIES } from '../habits.js';
 import { LEVELS, EQUIPMENT } from '../workouts.js';
-import { todayISO } from '../dates.js';
+import { todayISO, PROTOCOL_LENGTH } from '../dates.js';
 import { update, exportJSON, resetProtocol } from '../store.js';
 import { clearAllPhotos } from '../photos.js';
 import { fmtDateHuman, addDaysISO, toast } from '../ui.js';
@@ -32,7 +32,7 @@ function weightsCard(state){
 export function renderSettings(root, ctx){
   const { state } = ctx;
   const p = state.protocol;
-  const endDate = addDaysISO(p.startDate, 59);
+  const endDate = addDaysISO(p.startDate, PROTOCOL_LENGTH - 1);
 
   root.innerHTML = `
     <div class="container">
@@ -41,7 +41,7 @@ export function renderSettings(root, ctx){
       <div class="card" style="margin-bottom:14px">
         <div class="card-title">Protocol</div>
         <div class="field"><label>Start date</label><input type="date" id="s-start" value="${p.startDate}"></div>
-        <div class="row between"><span class="small muted">Target end date (Day 60)</span><span class="small">${fmtDateHuman(endDate)}</span></div>
+        <div class="row between"><span class="small muted">Target end date (Day ${PROTOCOL_LENGTH})</span><span class="small">${fmtDateHuman(endDate)}</span></div>
       </div>
 
       <div class="card" style="margin-bottom:14px">

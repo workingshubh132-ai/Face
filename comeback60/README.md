@@ -1,8 +1,8 @@
-# COMEBACK // 60
+# COMEBACK // 90
 
-> 60 days. One system. Become your sharpest version.
+> 90 days. One system. Become your sharpest version.
 
-A serious transformation dashboard for a 60-day protocol covering hair, skin,
+A serious transformation dashboard for a 90-day protocol covering hair, skin,
 grooming, glasses/style, physique, posture, sleep, presence and discipline.
 Not a habit tracker with confetti — a system for identifying the
 highest-impact changes, executing them daily, and seeing honestly whether
@@ -15,7 +15,7 @@ Static site, zero dependencies, zero build step — same philosophy as the
 
 - **No backend, no accounts.** Everything lives on this device: structured
   data (habits, days, scores, closet, settings) in `localStorage`, photo
-  blobs in `IndexedDB`. Nothing is ever uploaded, because a 60-day personal
+  blobs in `IndexedDB`. Nothing is ever uploaded, because a 90-day personal
   log — and progress photos especially — are nobody's business but the
   person running the protocol.
 - **Plain ES modules, no framework, no bundler.** `js/app.js` is a ~130-line
@@ -42,9 +42,26 @@ comeback60/
     scoring.js             weighted score, streaks, trends, weekly reviews, final report
     workouts.js            6 level×equipment workout templates + posture routine
     styleScore.js          explainable 5-criterion outfit scoring
+    skinCare.js             acne causes/triggers/food/products/ramp-up/timeline
     icons.js, ui.js         inline SVG icons, small render helpers
     views/*.js              one module per nav tab
 ```
+
+## The Skin tab
+
+Beyond the daily cleanser/moisturiser/sunscreen consistency tracking, the
+Skin tab (Appearance → Skin) covers acne specifically: why a pore blocks and
+what actually happens next, the everyday triggers that make it worse, the
+myths worth dropping, what's actually worth eating less of (a real but
+modest link, never framed as a fix), four named drugstore products with
+rough prices, a four-week ramp-up so you introduce one thing at a time, and
+a realistic timeline — including that the first two weeks often look no
+different or slightly worse, which is where most people quit. There's also
+a one-tap daily skin rating (Flared up → Clear) that builds its own trend
+line over time, separate from the fixed checklist so it never inflates the
+26-item count. And the same honesty as everywhere else in this app: if it's
+cystic, spreading, or nothing here has helped after 8-10 honest weeks, the
+tab says plainly that's a dermatologist's job, not this app's.
 
 ## The 8 category weights
 
@@ -56,7 +73,7 @@ followed, never a claim about how someone looks.
 ## What it deliberately does not do
 
 - No facial attractiveness scoring, ever. Progress photos are for comparing
-  your own Day 1 against your own Day 60 — nothing scores or ranks them.
+  your own Day 1 against your own Day 90 — nothing scores or ranks them.
 - No prescriptions, no diagnoses. The Skin tab says plainly to see a
   dermatologist for anything persistent; the Fitness tab never suggests
   crash dieting, starvation, or extreme training; posture work is framed as

@@ -1,6 +1,6 @@
 import { getState, subscribe, update } from './store.js';
 import { navigate } from './router.js';
-import { dayIndexFor, todayISO, isProtocolComplete, completedWeeksAsOf } from './dates.js';
+import { dayIndexFor, todayISO, isProtocolComplete, completedWeeksAsOf, PROTOCOL_LENGTH } from './dates.js';
 import { weeklyReview } from './scoring.js';
 import { ICONS } from './icons.js';
 import { renderOnboarding } from './views/onboarding.js';
@@ -60,8 +60,8 @@ function shellHTML(activeKey){
   return `
     <nav class="sidebar">
       <div class="brand">
-        <div class="word">COMEBACK <b>// 60</b></div>
-        <div class="sub">60 days. One system.</div>
+        <div class="word">COMEBACK <b>// ${PROTOCOL_LENGTH}</b></div>
+        <div class="sub">${PROTOCOL_LENGTH} days. One system.</div>
       </div>
       ${links}
     </nav>

@@ -2,29 +2,29 @@
 // be unit-tested directly in Node without a browser, the same way Skinprint's
 // scoring functions are tested.
 
-export const PROTOCOL_LENGTH = 60;
+export const PROTOCOL_LENGTH = 90;
 
 export const PHASES = [
-  { key: 'reset',      name: 'Reset',       start: 1,  end: 7,  goal: 'Establish baseline and remove bad habits.' },
-  { key: 'foundation', name: 'Foundation',  start: 8,  end: 21, goal: 'Make the system automatic. Not dramatic change yet — consistency.' },
-  { key: 'upgrade',    name: 'Upgrade',     start: 22, end: 42, goal: 'Progressive difficulty. Improve the hairstyle, wardrobe, fitness, posture and presence.' },
-  { key: 'polish',     name: 'Polish',      start: 43, end: 55, goal: 'Everything becomes cleaner and more intentional.' },
-  { key: 'final',      name: 'Final Form',  start: 56, end: 60, goal: 'Compare Day 1 to Day 60 and generate the Comeback Report.' }
+  { key: 'reset',      name: 'Reset',       start: 1,  end: 10, goal: 'Establish baseline and remove bad habits.' },
+  { key: 'foundation', name: 'Foundation',  start: 11, end: 30, goal: 'Make the system automatic. Not dramatic change yet — consistency.' },
+  { key: 'upgrade',    name: 'Upgrade',     start: 31, end: 63, goal: 'Progressive difficulty. Improve the hairstyle, wardrobe, fitness, posture and presence.' },
+  { key: 'polish',     name: 'Polish',      start: 64, end: 83, goal: 'Everything becomes cleaner and more intentional.' },
+  { key: 'final',      name: 'Final Form',  start: 84, end: 90, goal: 'Compare Day 1 to Day 90 and generate the Comeback Report.' }
 ];
 
 export const MILESTONES = [
   { day: 1,  label: 'Baseline' },
-  { day: 7,  label: 'Routine established' },
-  { day: 14, label: 'Consistency checkpoint' },
-  { day: 21, label: 'Foundation complete' },
-  { day: 30, label: 'Midpoint' },
-  { day: 42, label: 'Upgrade phase' },
-  { day: 50, label: 'Polish' },
-  { day: 56, label: 'Final stretch' },
-  { day: 60, label: 'Transformation review' }
+  { day: 10, label: 'Routine established' },
+  { day: 21, label: 'Consistency checkpoint' },
+  { day: 30, label: 'One month' },
+  { day: 45, label: 'Midpoint' },
+  { day: 63, label: 'Upgrade phase complete' },
+  { day: 75, label: 'Polish checkpoint' },
+  { day: 84, label: 'Final stretch' },
+  { day: 90, label: 'Transformation review' }
 ];
 
-export const PHOTO_SCHEDULE_DAYS = [1, 7, 14, 21, 30, 42, 50, 60];
+export const PHOTO_SCHEDULE_DAYS = [1, 7, 14, 21, 30, 42, 54, 66, 78, 90];
 
 function toUTCDate(iso){
   // Parsed as UTC midnight so a day boundary never shifts with the viewer's

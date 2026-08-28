@@ -1,5 +1,5 @@
 // Single source of truth. Everything lives in localStorage as one JSON blob —
-// this app has no server, by design: a 60-day personal log is nobody's
+// this app has no server, by design: a 90-day personal log is nobody's
 // business but the person running it, and that only holds if nothing ever
 // leaves the device. Photo binary data lives in IndexedDB instead (photos.js)
 // since localStorage is a poor fit for large blobs, but it is described in
@@ -92,8 +92,12 @@ export function subscribe(fn){
 
 export function ensureDay(iso){
   if (!state.days[iso]){
-    state.days[iso] = { tasks: {}, presenceIds: [], workout: { done: false, templateId: null, note: '' }, sleep: { bedtime: '', waketime: '', hours: null, quality: null }, notes: '', photoIds: [] };
+    state.days[iso] = { tasks: {}, presenceIds: [], workout: { done: false, templateId: null, note: '' }, sleep: { bedtime: '', waketime: '', hours: null, quality: null }, skin: { rating: null }, notes: '', photoIds: [] };
   }
+  // A day created before the skin-rating feature existed has no `skin` key
+  // at all — backfill it here rather than making every reader defend
+  // against a missing nested object.
+  if (!state.days[iso].skin) state.days[iso].skin = { rating: null };
   return state.days[iso];
 }
 

@@ -1,4 +1,4 @@
-import { PHASES, PHOTO_SCHEDULE_DAYS, nextPhotoDay } from '../dates.js';
+import { PHASES, PHOTO_SCHEDULE_DAYS, PROTOCOL_LENGTH, nextPhotoDay } from '../dates.js';
 import { scoreHistory, weeklyReview, finalReport, longestStreak, perfectDaysCount } from '../scoring.js';
 import { addPhoto, deletePhoto, listPhotosByType, photoURL } from '../photos.js';
 import { escapeHtml, sparkline, toast } from '../ui.js';
@@ -129,13 +129,14 @@ async function photosTab(ctx){
 
 function reportTab(ctx){
   const { state, dayIndex } = ctx;
-  if (dayIndex < 56){
-    return `<div class="empty">The 60-Day Comeback Report unlocks on Day 56, in the Final Form phase. ${56 - dayIndex} days to go.</div>`;
+  const finalPhaseStart = PHASES.find(p => p.key === 'final').start;
+  if (dayIndex < finalPhaseStart){
+    return `<div class="empty">The ${PROTOCOL_LENGTH}-Day Comeback Report unlocks on Day ${finalPhaseStart}, in the Final Form phase. ${finalPhaseStart - dayIndex} days to go.</div>`;
   }
-  const r = finalReport(state, Math.min(dayIndex, 60));
+  const r = finalReport(state, Math.min(dayIndex, PROTOCOL_LENGTH));
   return `
     <div class="card" style="margin-bottom:14px">
-      <div class="card-title">60-DAY COMEBACK REPORT</div>
+      <div class="card-title">${PROTOCOL_LENGTH}-DAY COMEBACK REPORT</div>
       <div class="row between" style="align-items:baseline">
         <div><div class="num" style="font-size:2.2rem;font-weight:700">${r.startScore} → ${r.finalScore}</div><div class="label">START → FINAL SCORE</div></div>
         <div class="tag ${r.improvementPct >= 0 ? 'tag-good' : 'tag-warn'}" style="font-size:0.85rem;padding:6px 12px">${r.improvementPct >= 0 ? '+' : ''}${r.improvementPct}%</div>
@@ -158,8 +159,8 @@ function reportTab(ctx){
       <ul class="stack">${r.weakestAreas.map(c => `<li class="row" style="gap:8px"><span style="color:var(--warn)">⚠</span> ${escapeHtml(c.label)}</li>`).join('')}</ul>
     </div>
     <div class="card">
-      <div class="card-title">Next 90 days</div>
-      <ol class="stack" style="list-style:none">${r.next90DayFocus.map((f,i) => `<li class="small">${i+1}. ${escapeHtml(f)}</li>`).join('')}</ol>
+      <div class="card-title">Keep it going</div>
+      <ol class="stack" style="list-style:none">${r.nextCycleFocus.map((f,i) => `<li class="small">${i+1}. ${escapeHtml(f)}</li>`).join('')}</ol>
     </div>
   `;
 }

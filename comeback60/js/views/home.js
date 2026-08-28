@@ -1,4 +1,4 @@
-import { phaseForDay, daysRemaining, nextMilestone, isoForDayIndex } from '../dates.js';
+import { phaseForDay, daysRemaining, nextMilestone, isoForDayIndex, PROTOCOL_LENGTH } from '../dates.js';
 import {
   comebackExecutionScore, currentStreak, weeklyConsistency, adaptationInsights,
   recoveryWarning, dailyCategoryTotals, dailyOverallPct
@@ -34,7 +34,7 @@ export function renderHome(root, ctx){
           </div>
           ${milestone ? `<span class="small muted">Next milestone: Day ${milestone.day}</span>` : ''}
         </div>
-        <h1 style="margin-top:12px">DAY ${dayIndex} <span class="muted" style="font-weight:500">/ 60</span></h1>
+        <h1 style="margin-top:12px">DAY ${dayIndex} <span class="muted" style="font-weight:500">/ ${PROTOCOL_LENGTH}</span></h1>
         <p class="sub">${remaining > 0 ? `${remaining} days remaining` : 'Protocol complete'} — ${escapeHtml(phase.goal)}</p>
       </div>
 

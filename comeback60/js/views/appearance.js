@@ -1,6 +1,8 @@
-import { update } from '../store.js';
-import { taskConsistency } from '../scoring.js';
-import { escapeHtml, fmtDateHuman, addDaysISO, fmtPct } from '../ui.js';
+import { update, ensureDay } from '../store.js';
+import { taskConsistency, skinRatingHistory } from '../scoring.js';
+import { isoForDayIndex } from '../dates.js';
+import { escapeHtml, fmtDateHuman, addDaysISO, fmtPct, sparkline } from '../ui.js';
+import { ACNE_CAUSES, ACNE_DIET, ACNE_PRODUCTS, ACNE_RAMP, ACNE_TIMELINE, SKIN_LOG_LABELS } from '../skinCare.js';
 
 let activeTab = 'hair';
 
@@ -56,11 +58,35 @@ function hairTab(ctx){
 
 function skinTab(ctx){
   const { state, dayIndex } = ctx;
+  const iso = isoForDayIndex(state.protocol.startDate, dayIndex);
+  const today = ensureDay(iso);
   const rows = Object.entries(SKIN_TASKS).map(([label, id]) => {
     const c = taskConsistency(state, [id], dayIndex, 14);
     return { label, ...c };
   });
+
+  const history = skinRatingHistory(state, dayIndex, 30);
+  const trendValues = history.map(h => h.rating * 20); // 1-5 -> 0-100 for the shared sparkline scale
+  const latest = history.length ? history[history.length - 1] : null;
+  const first = history.length ? history[0] : null;
+  const improved = first && latest && latest.day !== first.day ? latest.rating - first.rating : null;
+
   return `
+    <div class="card" style="margin-bottom:14px">
+      <div class="card-title">Log today's skin</div>
+      <div class="chip-row">
+        ${SKIN_LOG_LABELS.map((label, i) => {
+          const value = i + 1;
+          return `<button type="button" class="chip${today.skin.rating === value ? ' on' : ''}" data-skin-rating="${value}">${escapeHtml(label)}</button>`;
+        }).join('')}
+      </div>
+      ${history.length >= 2 ? `
+      <div class="hairline-block">
+        ${sparkline(trendValues, { w: 300, h: 50 })}
+        <p class="small muted" style="margin-top:4px">Last ${history.length} logged days${improved !== null ? (improved > 0 ? ` — trending up ${improved} point${improved === 1 ? '' : 's'}` : improved < 0 ? ` — trending down ${Math.abs(improved)} point${Math.abs(improved) === 1 ? '' : 's'}` : ' — holding steady') : ''}.</p>
+      </div>` : `<p class="hint">One tap a day. After a couple of weeks this becomes a real trend line instead of a memory you can't quite trust.</p>`}
+    </div>
+
     <div class="card" style="margin-bottom:14px">
       <div class="card-title">Consistency — last 14 days</div>
       ${rows.map(r => `
@@ -71,11 +97,71 @@ function skinTab(ctx){
       `).join('')}
       <p class="hint">Consistency is the only thing tracked here — not a promised outcome. Skin responds to weeks of repetition, not any single day.</p>
     </div>
+
+    <div class="card" style="margin-bottom:14px">
+      <div class="card-title">Why breakouts happen</div>
+      <ol class="stack" style="list-style:none;counter-reset:n">
+        ${ACNE_CAUSES.why.map((c, i) => `<li style="display:flex;gap:10px"><span class="num muted" style="width:16px">${i+1}.</span>${escapeHtml(c)}</li>`).join('')}
+      </ol>
+      <div class="hairline-block">
+        <div class="label" style="margin-bottom:8px">WHAT MAKES IT WORSE</div>
+        <ul class="stack">${ACNE_CAUSES.worse.map(w => `<li class="small">${escapeHtml(w)}</li>`).join('')}</ul>
+      </div>
+      <div class="hairline-block">
+        <div class="label" style="margin-bottom:8px">WORTH KNOWING</div>
+        <ul class="stack">${ACNE_CAUSES.myths.map(m => `<li class="small">${escapeHtml(m)}</li>`).join('')}</ul>
+      </div>
+    </div>
+
+    <div class="card" style="margin-bottom:14px">
+      <div class="card-title">Food worth thinking about</div>
+      <div class="label" style="margin-bottom:8px">CUT BACK ON</div>
+      <ul class="stack">${ACNE_DIET.avoid.map(a => `<li class="small">${escapeHtml(a)}</li>`).join('')}</ul>
+      <div class="hairline-block">
+        <div class="label" style="margin-bottom:8px">MORE USEFUL THAN AVOIDING</div>
+        <ul class="stack">${ACNE_DIET.help.map(h => `<li class="small">${escapeHtml(h)}</li>`).join('')}</ul>
+      </div>
+    </div>
+
+    <div class="card" style="margin-bottom:14px">
+      <div class="card-title">What to buy</div>
+      ${ACNE_PRODUCTS.map(p => `
+        <div class="row between" style="padding:10px 0;border-bottom:1px solid var(--line-soft)">
+          <div>
+            <div class="small" style="font-weight:600">${escapeHtml(p.name)}</div>
+            <div class="small muted" style="margin-top:2px">${escapeHtml(p.role)} — ${escapeHtml(p.why)}</div>
+          </div>
+          <span class="small muted" style="white-space:nowrap;padding-left:10px">${escapeHtml(p.price)}</span>
+        </div>
+      `).join('')}
+      <p class="hint">Suggestions, not endorsements — no affiliate links, nothing tracked. Buy one thing at a time and give it six weeks.</p>
+    </div>
+
+    <div class="card" style="margin-bottom:14px">
+      <div class="card-title">How to start, week by week</div>
+      ${ACNE_RAMP.map(w => `
+        <div style="padding:10px 0;border-bottom:1px solid var(--line-soft)">
+          <div class="small" style="font-weight:600">${escapeHtml(w.week)} — ${escapeHtml(w.doing)}</div>
+          <div class="small muted" style="margin-top:3px">${escapeHtml(w.why)}</div>
+        </div>
+      `).join('')}
+    </div>
+
+    <div class="card" style="margin-bottom:14px">
+      <div class="card-title">What to expect, and when</div>
+      ${ACNE_TIMELINE.map(t => `
+        <div style="padding:10px 0;border-bottom:1px solid var(--line-soft)">
+          <div class="small" style="font-weight:600">${escapeHtml(t.when)}</div>
+          <div class="small muted" style="margin-top:3px">${escapeHtml(t.what)}</div>
+        </div>
+      `).join('')}
+    </div>
+
     <div class="callout callout-warn" style="margin-bottom:14px">
       <b>DO NOT OVERDO IT.</b> Avoid: washing more than twice a day, aggressive scrubbing or physical exfoliants, picking at anything, bleaching or "fairness" products, and stacking multiple active ingredients at once. More steps is not the same as more progress.
     </div>
     <div class="callout callout-info">
-      If something persistent or severe is going on with your skin, a dermatologist can actually diagnose it. This app tracks consistency — it does not and cannot diagnose anything.
+      If something persistent or severe is going on with your skin, a dermatologist can actually diagnose and treat it. This app tracks consistency and points you at what usually helps — it does not and cannot diagnose anything.
     </div>
   `;
 }
@@ -185,6 +271,15 @@ export function renderAppearance(root, ctx){
   bind('g-notes', 'glasses', 'notes');
   bind('g-frame-width', 'glasses', 'frameWidthMm', v => v ? Number(v) : null);
   bind('g-face-width', 'glasses', 'faceWidthMm', v => v ? Number(v) : null);
+
+  const skinIso = isoForDayIndex(ctx.state.protocol.startDate, ctx.dayIndex);
+  root.querySelectorAll('[data-skin-rating]').forEach(btn => btn.addEventListener('click', () => {
+    const value = Number(btn.dataset.skinRating);
+    update(s => {
+      const d = ensureDay(skinIso);
+      d.skin.rating = d.skin.rating === value ? null : value; // tap again to clear
+    });
+  }));
 
   const seedBtn = document.getElementById('seed-grooming');
   if (seedBtn) seedBtn.addEventListener('click', () => {
