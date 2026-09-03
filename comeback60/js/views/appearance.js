@@ -1,8 +1,8 @@
-import { update, ensureDay } from '../store.js';
-import { taskConsistency, skinRatingHistory } from '../scoring.js';
-import { isoForDayIndex } from '../dates.js';
-import { escapeHtml, fmtDateHuman, addDaysISO, fmtPct, sparkline } from '../ui.js';
-import { ACNE_CAUSES, ACNE_DIET, ACNE_PRODUCTS, ACNE_RAMP, ACNE_TIMELINE, SKIN_LOG_LABELS } from '../skinCare.js';
+import { update } from '../store.js';
+import { taskConsistency } from '../scoring.js';
+import { escapeHtml, fmtDateHuman, addDaysISO, fmtPct } from '../ui.js';
+import { ACNE_CAUSES, ACNE_DIET, ACNE_PRODUCTS, ACNE_RAMP, ACNE_TIMELINE } from '../skinCare.js';
+import { skinLogCardHTML, wireSkinLogCard } from './skinLogWidget.js';
 
 let activeTab = 'hair';
 
@@ -58,34 +58,13 @@ function hairTab(ctx){
 
 function skinTab(ctx){
   const { state, dayIndex } = ctx;
-  const iso = isoForDayIndex(state.protocol.startDate, dayIndex);
-  const today = ensureDay(iso);
   const rows = Object.entries(SKIN_TASKS).map(([label, id]) => {
     const c = taskConsistency(state, [id], dayIndex, 14);
     return { label, ...c };
   });
 
-  const history = skinRatingHistory(state, dayIndex, 30);
-  const trendValues = history.map(h => h.rating * 20); // 1-5 -> 0-100 for the shared sparkline scale
-  const latest = history.length ? history[history.length - 1] : null;
-  const first = history.length ? history[0] : null;
-  const improved = first && latest && latest.day !== first.day ? latest.rating - first.rating : null;
-
   return `
-    <div class="card" style="margin-bottom:14px">
-      <div class="card-title">Log today's skin</div>
-      <div class="chip-row">
-        ${SKIN_LOG_LABELS.map((label, i) => {
-          const value = i + 1;
-          return `<button type="button" class="chip${today.skin.rating === value ? ' on' : ''}" data-skin-rating="${value}">${escapeHtml(label)}</button>`;
-        }).join('')}
-      </div>
-      ${history.length >= 2 ? `
-      <div class="hairline-block">
-        ${sparkline(trendValues, { w: 300, h: 50 })}
-        <p class="small muted" style="margin-top:4px">Last ${history.length} logged days${improved !== null ? (improved > 0 ? ` — trending up ${improved} point${improved === 1 ? '' : 's'}` : improved < 0 ? ` — trending down ${Math.abs(improved)} point${Math.abs(improved) === 1 ? '' : 's'}` : ' — holding steady') : ''}.</p>
-      </div>` : `<p class="hint">One tap a day. After a couple of weeks this becomes a real trend line instead of a memory you can't quite trust.</p>`}
-    </div>
+    ${skinLogCardHTML(ctx)}
 
     <div class="card" style="margin-bottom:14px">
       <div class="card-title">Consistency — last 14 days</div>
@@ -272,14 +251,7 @@ export function renderAppearance(root, ctx){
   bind('g-frame-width', 'glasses', 'frameWidthMm', v => v ? Number(v) : null);
   bind('g-face-width', 'glasses', 'faceWidthMm', v => v ? Number(v) : null);
 
-  const skinIso = isoForDayIndex(ctx.state.protocol.startDate, ctx.dayIndex);
-  root.querySelectorAll('[data-skin-rating]').forEach(btn => btn.addEventListener('click', () => {
-    const value = Number(btn.dataset.skinRating);
-    update(s => {
-      const d = ensureDay(skinIso);
-      d.skin.rating = d.skin.rating === value ? null : value; // tap again to clear
-    });
-  }));
+  wireSkinLogCard(root, ctx);
 
   const seedBtn = document.getElementById('seed-grooming');
   if (seedBtn) seedBtn.addEventListener('click', () => {

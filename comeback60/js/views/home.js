@@ -5,6 +5,7 @@ import {
 } from '../scoring.js';
 import { escapeHtml, ringSVG, fmtPct, scoreTone } from '../ui.js';
 import { navigate } from '../router.js';
+import { skinLogCardHTML, wireSkinLogCard } from './skinLogWidget.js';
 
 export function renderHome(root, ctx){
   const { state, dayIndex } = ctx;
@@ -70,6 +71,8 @@ export function renderHome(root, ctx){
         </div>
       </div>
 
+      ${skinLogCardHTML(ctx)}
+
       <div class="card" style="margin-bottom:14px">
         <div class="card-title">Current focus</div>
         <p style="font-size:0.95rem">${escapeHtml(insights.whatsHoldingBack[0]?.label || insights.biggestWeakness.label)} needs the most attention this week.</p>
@@ -106,4 +109,5 @@ export function renderHome(root, ctx){
 
   const goToday = document.getElementById('go-today');
   if (goToday) goToday.addEventListener('click', () => navigate('today'));
+  wireSkinLogCard(root, ctx);
 }
